@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { getToken, clearToken } from './auth';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -71,5 +71,5 @@ export const dashboardApi = {
 };
 
 export const healthApi = {
-  check: () => api.get('/health'),
+  check: () => axios.get('http://localhost:4000/health'),
 };
