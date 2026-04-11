@@ -47,7 +47,7 @@ export const authApi = {
 };
 
 export const eventsApi = {
-  list: (params?: { search?: string }) => api.get<unknown[]>('/events', { params }),
+  list: (params?: { search?: string }) => api.get<{ items: Event[]; total: number; page: number; pageSize: number }>('/events', { params }),
   get: (id: string) => api.get<unknown>(`/events/${id}`),
   create: (data: unknown) => api.post('/events', data),
   update: (id: string, data: unknown) => api.patch(`/events/${id}`, data),

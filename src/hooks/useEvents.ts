@@ -13,7 +13,7 @@ export function useEvents(params?: { search?: string }) {
     queryKey: ['events', params],
     queryFn: async () => {
       const res = await eventsApi.list(params);
-      return (res.data ?? []) as Event[];
+      return res.data.items ;
     },
   });
 }

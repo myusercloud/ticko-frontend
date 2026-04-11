@@ -13,16 +13,17 @@ export interface TicketType {
 }
 
 export interface Event {
-  id: string;
-  name: string;
-  description?: string;
-  venue: string;
-  date: string;
-  imageUrl?: string;
-  ticketTypes: TicketType[];
-  organizerId?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  id: string
+  name: string
+  description?: string
+  startTime: string
+  endTime: string
+  venue?: {
+    id: string
+    name: string
+    city?: string
+  }
+  ticketTypes?: any[]
 }
 
 export interface Ticket {
