@@ -1,344 +1,455 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Container,
+  Flex,
   Heading,
   Text,
   Button,
-  VStack,
-  Card,
-  CardBody,
-  FormControl,
-  FormLabel,
-  Input,
-  Textarea,
-  IconButton,
-  HStack,
-  useToast,
+  SimpleGrid,
+  Skeleton,
   Alert,
   AlertIcon,
-  Skeleton,
+  Card,
+  CardBody,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText,
+  Badge,
+  Progress,
   Tabs,
   TabList,
-  TabPanels,
   Tab,
+  TabPanels,
   TabPanel,
+  HStack,
+  Icon,
+  Divider,
 } from '@chakra-ui/react';
 import Link from 'next/link';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { AddIcon, DeleteIcon } from '@chakra-ui/icons';
-import { useEvent, useUpdateEvent, useEventStats } from '@/hooks/useEvents';
-import { DashboardStats } from '@/components/DashboardStats';
+import { CalendarIcon, TriangleUpIcon } from '@chakra-ui/icons';
+import { useEvents } from '@/hooks/useEvents';
+import { useOrganizerStats } from '@/hooks/useOrganizerStats';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuth } from '@/hooks/useAuth';
+import type { Event } from '@/lib/types';
 
-const ticketTypeSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'Name required'),
-  price: z.number().min(0, 'Price must be at least 0'),
-  quantity: z.number().int().min(1, 'Quantity must be at least 1'),
-});
-
-const schema = z.object({
-  name: z.string().min(1, 'Event name is required'),
-  description: z.string().optional(),
-  venueName: z.string().min(1, 'Venue name is required'),
-  venueCity: z.string().optional(),
-  startTime: z.string().min(1, 'Start date is required'),
-  endTime: z.string().optional(),
-  ticketTypes: z.array(ticketTypeSchema).min(1, 'Add at least one ticket type'),
-});
-
-type EditEventForm = z.infer<typeof schema>;
-
-function toDateTimeLocal(value?: string) {
-  if (!value) return '';
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-
-  const offset = parsed.getTimezoneOffset();
-  const local = new Date(parsed.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
+function getEventStatus(event: Event): 'upcoming' | 'past' | 'draft' {
+  if (event.isPublished === false) return 'draft';
+  if (new Date(event.startTime) < new Date()) return 'past';
+  return 'upcoming';
 }
 
-export default function DashboardEventDetailPage({
-  params,
+function formatRelativeDate(dateStr: string): string {
+  const diff = Math.ceil(
+    (new Date(dateStr).getTime() - Date.now()) / 86_400_000
+  );
+
+  if (diff < 0) return 'Ended';
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return `${diff} days away`;
+}
+
+function formatDate(dateStr: string): string {
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+
+  return parsed.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatCurrency(amount: number): string {
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(1)}k`;
+  return `$${amount.toFixed(0)}`;
+}
+
+function getVenueLabel(event: Event): string {
+  if (!event.venue) return 'Venue TBA';
+  if (typeof event.venue === 'string') return event.venue;
+  return event.venue.city
+    ? `${event.venue.name}, ${event.venue.city}`
+    : event.venue.name;
+}
+
+function getTotalCapacity(event: Event): number {
+  if (typeof event.totalCapacity === 'number') return event.totalCapacity;
+
+  return (event.ticketTypes ?? []).reduce(
+    (sum, tt) => sum + Number(tt.quantity ?? 0),
+    0
+  );
+}
+
+function getTicketsSold(event: Event): number {
+  if (typeof event.ticketsSold === 'number') return event.ticketsSold;
+  return event._count?.orders ?? 0;
+}
+
+const STATUS_BADGE: Record<
+  'upcoming' | 'past' | 'draft',
+  { label: string; colorScheme: string }
+> = {
+  upcoming: { label: 'Published', colorScheme: 'green' },
+  past: { label: 'Ended', colorScheme: 'gray' },
+  draft: { label: 'Draft', colorScheme: 'yellow' },
+};
+
+function MetricCard({
+  label,
+  value,
+  sub,
 }: {
-  params: Promise<{ id: string }>;
+  label: string;
+  value: string;
+  sub: string;
 }) {
-  const { id } = use(params);
-  const toast = useToast();
-  const { data: event, isLoading, error } = useEvent(id);
-  const { data: stats, isLoading: statsLoading } = useEventStats(id);
-  const updateEvent = useUpdateEvent(id);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  return (
+    <Stat bg="gray.50" borderRadius="md" px={4} py={3}>
+      <StatLabel fontSize="xs" color="gray.500">
+        {label}
+      </StatLabel>
+      <StatNumber fontSize="2xl">{value}</StatNumber>
+      <StatHelpText mb={0} fontSize="xs" color="gray.400">
+        {sub}
+      </StatHelpText>
+    </Stat>
+  );
+}
 
-  const initialValues = useMemo<EditEventForm>(() => {
-    const venue =
-      typeof event?.venue === 'string'
-        ? { name: event.venue, city: '' }
-        : {
-            name: event?.venue?.name ?? '',
-            city: event?.venue?.city ?? '',
-          };
+function EventCardEnhanced({ event }: { event: Event }) {
+  const status = getEventStatus(event);
+  const badge = STATUS_BADGE[status];
+  const sold = getTicketsSold(event);
+  const capacity = getTotalCapacity(event);
+  const pct = capacity > 0 ? Math.round((sold / capacity) * 100) : 0;
+  const relDate = formatRelativeDate(event.startTime);
 
-    return {
-      name: event?.name ?? '',
-      description: event?.description ?? '',
-      venueName: venue.name,
-      venueCity: venue.city,
-      startTime: toDateTimeLocal(event?.startTime ?? event?.date),
-      endTime: toDateTimeLocal(event?.endTime),
-      ticketTypes:
-        event?.ticketTypes?.map((tt) => ({
-          id: tt.id,
-          name: tt.name,
-          price: Number(tt.price),
-          quantity: Number(tt.quantity),
-        })) ?? [],
-    };
-  }, [event]);
+  return (
+    <Card variant="outline" overflow="hidden">
+      <CardBody p={4}>
+        <Flex justify="space-between" align="flex-start" gap={2} mb={2}>
+          <Heading size="sm" lineHeight="short" noOfLines={2}>
+            {event.name}
+          </Heading>
+          <Badge
+            colorScheme={badge.colorScheme}
+            borderRadius="full"
+            px={2}
+            flexShrink={0}
+          >
+            {badge.label}
+          </Badge>
+        </Flex>
 
-  const form = useForm<EditEventForm>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: '',
-      description: '',
-      venueName: '',
-      venueCity: '',
-      startTime: '',
-      endTime: '',
-      ticketTypes: [],
-    },
-  });
+        <Flex direction="column" gap={1} mb={3}>
+          <HStack spacing={1} color="gray.500" fontSize="xs">
+            <CalendarIcon boxSize={3} />
+            <Text>
+              {formatDate(event.startTime)}
+              {status === 'upcoming' && ` · ${relDate}`}
+            </Text>
+          </HStack>
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: 'ticketTypes',
-  });
+          <HStack spacing={1} color="gray.500" fontSize="xs">
+            <Icon viewBox="0 0 24 24" boxSize={3}>
+              <path
+                fill="currentColor"
+                d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"
+              />
+            </Icon>
+            <Text>{getVenueLabel(event)}</Text>
+          </HStack>
+        </Flex>
 
-  useEffect(() => {
-    if (!event) return;
-    form.reset(initialValues);
-  }, [event, form, initialValues]);
+        <Divider mb={3} />
 
-  const onSubmit = form.handleSubmit(async (data) => {
-    setSubmitError(null);
+        {status !== 'draft' && (
+          <>
+            <SimpleGrid columns={3} spacing={2} mb={3} textAlign="center">
+              <Box>
+                <Text fontWeight="500" fontSize="md">
+                  {sold.toLocaleString()}
+                </Text>
+                <Text fontSize="10px" color="gray.400">
+                  {status === 'past' ? 'attended' : 'sold'}
+                </Text>
+              </Box>
 
-    try {
-      const payload = {
-        name: data.name,
-        description: data.description || undefined,
-        startTime: new Date(data.startTime).toISOString(),
-        endTime: data.endTime ? new Date(data.endTime).toISOString() : undefined,
-        venue: {
-          name: data.venueName,
-          city: data.venueCity || undefined,
-        },
-        ticketTypes: data.ticketTypes.map((tt) => ({
-          id: tt.id,
-          name: tt.name,
-          price: Number(tt.price),
-          quantity: Number(tt.quantity),
-        })),
-      };
+              <Box>
+                <Text fontWeight="500" fontSize="md">
+                  {capacity.toLocaleString()}
+                </Text>
+                <Text fontSize="10px" color="gray.400">
+                  capacity
+                </Text>
+              </Box>
 
-      await updateEvent.mutateAsync(payload);
-      toast({ title: 'Event updated', status: 'success' });
-    } catch (err) {
-      setSubmitError((err as Error).message);
-    }
-  });
+              <Box>
+                <Text fontWeight="500" fontSize="md">
+                  {event.revenue != null ? formatCurrency(event.revenue) : '—'}
+                </Text>
+                <Text fontSize="10px" color="gray.400">
+                  revenue
+                </Text>
+              </Box>
+            </SimpleGrid>
 
-  if (error) {
-    return (
-      <ProtectedRoute>
-        <Container maxW="4xl" py={8}>
-          <Alert status="error" borderRadius="md">
-            <AlertIcon />
-            {(error as Error).message}
-          </Alert>
-        </Container>
-      </ProtectedRoute>
-    );
-  }
+            {status === 'upcoming' && (
+              <Box mb={3}>
+                <Flex
+                  justify="space-between"
+                  fontSize="10px"
+                  color="gray.400"
+                  mb={1}
+                >
+                  <Text>Capacity</Text>
+                  <Text>{pct}%</Text>
+                </Flex>
+                <Progress
+                  value={pct}
+                  size="xs"
+                  colorScheme={
+                    pct >= 90 ? 'red' : pct >= 70 ? 'orange' : 'brand'
+                  }
+                  borderRadius="full"
+                />
+              </Box>
+            )}
+          </>
+        )}
 
-  if (isLoading || !event) {
-    return (
-      <ProtectedRoute>
-        <Container maxW="2xl" py={8}>
-          <Skeleton height="400px" borderRadius="lg" />
-        </Container>
-      </ProtectedRoute>
-    );
-  }
+        {status === 'draft' && (
+          <Text fontSize="xs" color="gray.400" mb={3}>
+            This event is still in draft and can be completed before publishing.
+          </Text>
+        )}
+
+        <Button
+          as={Link}
+          href={`/dashboard/events/${event.id}`}
+          size="sm"
+          variant="outline"
+          width="full"
+        >
+          {status === 'draft'
+            ? 'Continue editing'
+            : status === 'past'
+            ? 'View report'
+            : 'Manage'}
+        </Button>
+      </CardBody>
+    </Card>
+  );
+}
+
+function MetricsSkeleton() {
+  return (
+    <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={8}>
+      {[1, 2, 3, 4].map((i) => (
+        <Skeleton key={i} height="80px" borderRadius="md" />
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function GridSkeleton() {
+  return (
+    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+      {[1, 2, 3].map((i) => (
+        <Skeleton key={i} height="220px" borderRadius="md" />
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function EmptyState() {
+  return (
+    <Card bg="gray.50">
+      <CardBody textAlign="center" py={16}>
+        <Box
+          w={10}
+          h={10}
+          border="1px solid"
+          borderColor="gray.200"
+          borderRadius="lg"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          mx="auto"
+          mb={4}
+        >
+          <TriangleUpIcon color="gray.400" />
+        </Box>
+
+        <Heading size="sm" mb={2}>
+          No events yet
+        </Heading>
+
+        <Text color="gray.500" fontSize="sm" maxW="260px" mx="auto" mb={6}>
+          Create your first event to start selling tickets and tracking
+          attendance.
+        </Text>
+
+        <Button
+          as={Link}
+          href="/dashboard/events/create"
+          colorScheme="brand"
+          size="sm"
+        >
+          Create your first event
+        </Button>
+      </CardBody>
+    </Card>
+  );
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const { data: events, isLoading, error } = useEvents();
+  const { data: stats, isLoading: statsLoading } = useOrganizerStats();
+
+  const allEvents = events ?? [];
+  const upcoming = allEvents.filter((e) => getEventStatus(e) === 'upcoming');
+  const past = allEvents.filter((e) => getEventStatus(e) === 'past');
+  const drafts = allEvents.filter((e) => getEventStatus(e) === 'draft');
 
   return (
     <ProtectedRoute>
-      <Container maxW="4xl" py={8} px={4}>
-        <HStack mb={6} spacing={4} flexWrap="wrap">
-          <Button as={Link} href="/dashboard" size="sm" variant="ghost">
-            Back to dashboard
+      <Container maxW="7xl" py={8} px={4}>
+        <Flex
+          justify="space-between"
+          align="flex-start"
+          mb={8}
+          wrap="wrap"
+          gap={4}
+        >
+          <Box>
+            <Heading size="lg">Organizer dashboard</Heading>
+            <Text color="gray.500" mt={1}>
+              {user?.name
+                ? `Welcome back, ${user.name.split(' ')[0]}`
+                : 'Manage your events'}
+            </Text>
+          </Box>
+
+          <Button
+            as={Link}
+            href="/dashboard/events/create"
+            colorScheme="brand"
+          >
+            + Create event
           </Button>
-          <Heading size="lg">{event.name}</Heading>
-        </HStack>
+        </Flex>
 
-        <Tabs variant="enclosed" colorScheme="brand">
-          <TabList>
-            <Tab>Overview & stats</Tab>
-            <Tab>Edit event</Tab>
-          </TabList>
+        {error && (
+          <Alert status="error" borderRadius="md" mb={6}>
+            <AlertIcon />
+            {(error as Error).message}
+          </Alert>
+        )}
 
-          <TabPanels>
-            <TabPanel px={0} pt={6}>
-              <DashboardStats stats={stats} isLoading={statsLoading} />
-            </TabPanel>
+        {statsLoading ? (
+          <MetricsSkeleton />
+        ) : (
+          <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={8}>
+            <MetricCard
+              label="Total events"
+              value={String(allEvents.length)}
+              sub={`${upcoming.length} upcoming`}
+            />
+            <MetricCard
+              label="Tickets sold"
+              value={(stats?.totalTicketsSold ?? 0).toLocaleString()}
+              sub="across all events"
+            />
+            <MetricCard
+              label="Gross revenue"
+              value={formatCurrency(stats?.totalRevenue ?? 0)}
+              sub="all time"
+            />
+            <MetricCard
+              label="Check-in rate"
+              value={
+                stats?.checkInRate != null ? `${stats.checkInRate}%` : '—'
+              }
+              sub="last completed event"
+            />
+          </SimpleGrid>
+        )}
 
-            <TabPanel px={0} pt={6}>
-              {submitError && (
-                <Alert status="error" borderRadius="md" mb={4}>
-                  <AlertIcon />
-                  {submitError}
-                </Alert>
-              )}
+        {isLoading ? (
+          <GridSkeleton />
+        ) : allEvents.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <Tabs variant="line" colorScheme="brand">
+            <TabList mb={6}>
+              <Tab fontSize="sm">All ({allEvents.length})</Tab>
+              <Tab fontSize="sm">Upcoming ({upcoming.length})</Tab>
+              <Tab fontSize="sm">Past ({past.length})</Tab>
+              <Tab fontSize="sm">Drafts ({drafts.length})</Tab>
+            </TabList>
 
-              <Card bg="white">
-                <CardBody p={6}>
-                  <form onSubmit={onSubmit}>
-                    <VStack spacing={5} align="stretch">
-                      <FormControl isInvalid={!!form.formState.errors.name}>
-                        <FormLabel>Event name</FormLabel>
-                        <Input {...form.register('name')} />
-                      </FormControl>
+            <TabPanels>
+              <TabPanel p={0}>
+                <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                  {allEvents.map((event) => (
+                    <EventCardEnhanced key={event.id} event={event} />
+                  ))}
+                </SimpleGrid>
+              </TabPanel>
 
-                      <FormControl>
-                        <FormLabel>Description</FormLabel>
-                        <Textarea {...form.register('description')} rows={3} />
-                      </FormControl>
+              <TabPanel p={0}>
+                {upcoming.length === 0 ? (
+                  <Text color="gray.500" fontSize="sm" py={8} textAlign="center">
+                    No upcoming events.
+                  </Text>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                    {upcoming.map((event) => (
+                      <EventCardEnhanced key={event.id} event={event} />
+                    ))}
+                  </SimpleGrid>
+                )}
+              </TabPanel>
 
-                      <FormControl isInvalid={!!form.formState.errors.venueName}>
-                        <FormLabel>Venue name</FormLabel>
-                        <Input {...form.register('venueName')} />
-                      </FormControl>
+              <TabPanel p={0}>
+                {past.length === 0 ? (
+                  <Text color="gray.500" fontSize="sm" py={8} textAlign="center">
+                    No past events.
+                  </Text>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                    {past.map((event) => (
+                      <EventCardEnhanced key={event.id} event={event} />
+                    ))}
+                  </SimpleGrid>
+                )}
+              </TabPanel>
 
-                      <FormControl>
-                        <FormLabel>Venue city</FormLabel>
-                        <Input {...form.register('venueCity')} />
-                      </FormControl>
-
-                      <FormControl isInvalid={!!form.formState.errors.startTime}>
-                        <FormLabel>Start date & time</FormLabel>
-                        <Input
-                          {...form.register('startTime')}
-                          type="datetime-local"
-                        />
-                      </FormControl>
-
-                      <FormControl>
-                        <FormLabel>End date & time</FormLabel>
-                        <Input
-                          {...form.register('endTime')}
-                          type="datetime-local"
-                        />
-                      </FormControl>
-
-                      <Box w="100%">
-                        <FormLabel>Ticket types</FormLabel>
-                        <VStack align="stretch" spacing={3} mt={2}>
-                          {fields.map((field, index) => (
-                            <HStack
-                              key={field.id}
-                              align="flex-end"
-                              spacing={2}
-                              p={3}
-                              bg="gray.50"
-                              borderRadius="md"
-                            >
-                              <FormControl flex={2}>
-                                <FormLabel fontSize="sm">Name</FormLabel>
-                                <Input
-                                  size="sm"
-                                  {...form.register(`ticketTypes.${index}.name`)}
-                                />
-                              </FormControl>
-
-                              <FormControl flex={1}>
-                                <FormLabel fontSize="sm">Price ($)</FormLabel>
-                                <Input
-                                  size="sm"
-                                  type="number"
-                                  step="0.01"
-                                  {...form.register(`ticketTypes.${index}.price`, {
-                                    valueAsNumber: true,
-                                  })}
-                                />
-                              </FormControl>
-
-                              <FormControl flex={1}>
-                                <FormLabel fontSize="sm">Qty</FormLabel>
-                                <Input
-                                  size="sm"
-                                  type="number"
-                                  {...form.register(
-                                    `ticketTypes.${index}.quantity`,
-                                    {
-                                      valueAsNumber: true,
-                                    }
-                                  )}
-                                />
-                              </FormControl>
-
-                              <IconButton
-                                aria-label="Remove ticket type"
-                                icon={<DeleteIcon />}
-                                size="sm"
-                                variant="ghost"
-                                colorScheme="red"
-                                onClick={() => remove(index)}
-                                isDisabled={fields.length <= 1}
-                              />
-                            </HStack>
-                          ))}
-
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            leftIcon={<AddIcon />}
-                            onClick={() =>
-                              append({
-                                name: '',
-                                price: 0,
-                                quantity: 10,
-                              })
-                            }
-                          >
-                            Add ticket type
-                          </Button>
-                        </VStack>
-                      </Box>
-
-                      <HStack w="100%" justify="flex-end" pt={4}>
-                        <Button
-                          type="submit"
-                          colorScheme="brand"
-                          isLoading={updateEvent.isPending}
-                          loadingText="Saving..."
-                        >
-                          Save changes
-                        </Button>
-                      </HStack>
-                    </VStack>
-                  </form>
-                </CardBody>
-              </Card>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+              <TabPanel p={0}>
+                {drafts.length === 0 ? (
+                  <Text color="gray.500" fontSize="sm" py={8} textAlign="center">
+                    No draft events.
+                  </Text>
+                ) : (
+                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+                    {drafts.map((event) => (
+                      <EventCardEnhanced key={event.id} event={event} />
+                    ))}
+                  </SimpleGrid>
+                )}
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        )}
       </Container>
     </ProtectedRoute>
   );
