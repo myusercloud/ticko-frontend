@@ -21,6 +21,7 @@ import {
   AlertIcon,
 } from '@chakra-ui/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -30,27 +31,30 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 const ticketTypeSchema = z.object({
   name: z.string().min(1, 'Name required'),
-  price: z.number().min(0, 'Price must be ≥ 0'),
-  quantity: z.number().int().min(1, 'Quantity must be ≥ 1'),
+  price: z.number().min(0, 'Price must be >= 0'),
+  quantity: z.number().int().min(1, 'Quantity must be >= 1'),
 });
 
 const schema = z.object({
   name: z.string().min(1, 'Event name is required'),
   description: z.string().optional(),
-  venue: z.string().min(1, 'Venue is required'),
-  date: z.string().min(1, 'Date is required'),
+  venueName: z.string().min(1, 'Venue name is required'),
+  venueCity: z.string().optional(),
+  startTime: z.string().min(1, 'Start date is required'),
+  endTime: z.string().optional(),
   ticketTypes: z.array(ticketTypeSchema).min(1, 'Add at least one ticket type'),
 });
 
 type CreateEventForm = z.infer<typeof schema>;
 
-const defaultTicketType = {
+const defaultTicketType: CreateEventForm['ticketTypes'][0] = {
   name: 'General Admission',
   price: 0,
   quantity: 100,
 };
 
 export default function CreateEventPage() {
+  const router = useRouter();
   const toast = useToast();
   const createEvent = useCreateEvent();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -60,8 +64,10 @@ export default function CreateEventPage() {
     defaultValues: {
       name: '',
       description: '',
-      venue: '',
-      date: '',
+      venueName: '',
+      venueCity: '',
+      startTime: '',
+      endTime: '',
       ticketTypes: [{ ...defaultTicketType }],
     },
   });
@@ -73,21 +79,29 @@ export default function CreateEventPage() {
 
   const onSubmit = form.handleSubmit(async (data) => {
     setSubmitError(null);
+
     try {
       const payload = {
         name: data.name,
         description: data.description || undefined,
-        venue: data.venue,
-        date: data.date,
+        startTime: new Date(data.startTime).toISOString(),
+        endTime: data.endTime ? new Date(data.endTime).toISOString() : undefined,
+        venue: {
+          name: data.venueName,
+          city: data.venueCity || undefined,
+        },
         ticketTypes: data.ticketTypes.map((tt) => ({
           name: tt.name,
           price: Number(tt.price),
           quantity: Number(tt.quantity),
         })),
       };
-      await createEvent.mutateAsync(payload as never);
+
+      await createEvent.mutateAsync(payload);
+
       toast({ title: 'Event created', status: 'success' });
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
+      router.refresh();
     } catch (err) {
       setSubmitError((err as Error).message);
     }
@@ -116,7 +130,10 @@ export default function CreateEventPage() {
               <VStack spacing={5} align="stretch">
                 <FormControl isInvalid={!!form.formState.errors.name}>
                   <FormLabel>Event name</FormLabel>
-                  <Input {...form.register('name')} placeholder="Summer Concert 2025" />
+                  <Input
+                    {...form.register('name')}
+                    placeholder="Summer Concert 2026"
+                  />
                   <Text color="red.500" fontSize="sm" mt={1}>
                     {form.formState.errors.name?.message}
                   </Text>
@@ -131,31 +148,62 @@ export default function CreateEventPage() {
                   />
                 </FormControl>
 
-                <FormControl isInvalid={!!form.formState.errors.venue}>
-                  <FormLabel>Venue</FormLabel>
-                  <Input {...form.register('venue')} placeholder="Central Park Arena" />
+                <FormControl isInvalid={!!form.formState.errors.venueName}>
+                  <FormLabel>Venue name</FormLabel>
+                  <Input
+                    {...form.register('venueName')}
+                    placeholder="Central Park Arena"
+                  />
                   <Text color="red.500" fontSize="sm" mt={1}>
-                    {form.formState.errors.venue?.message}
+                    {form.formState.errors.venueName?.message}
                   </Text>
                 </FormControl>
 
-                <FormControl isInvalid={!!form.formState.errors.date}>
-                  <FormLabel>Date & time</FormLabel>
+                <FormControl>
+                  <FormLabel>Venue city (optional)</FormLabel>
                   <Input
-                    {...form.register('date')}
+                    {...form.register('venueCity')}
+                    placeholder="Nairobi"
+                  />
+                </FormControl>
+
+                <FormControl isInvalid={!!form.formState.errors.startTime}>
+                  <FormLabel>Start date & time</FormLabel>
+                  <Input
+                    {...form.register('startTime')}
                     type="datetime-local"
                   />
                   <Text color="red.500" fontSize="sm" mt={1}>
-                    {form.formState.errors.date?.message}
+                    {form.formState.errors.startTime?.message}
                   </Text>
+                </FormControl>
+
+                <FormControl>
+                  <FormLabel>End date & time (optional)</FormLabel>
+                  <Input
+                    {...form.register('endTime')}
+                    type="datetime-local"
+                  />
                 </FormControl>
 
                 <Box w="100%">
                   <FormLabel>Ticket types</FormLabel>
                   <VStack align="stretch" spacing={3} mt={2}>
                     {fields.map((field, index) => (
-                      <HStack key={field.id} align="flex-end" spacing={2} p={3} bg="gray.50" borderRadius="md">
-                        <FormControl flex={2} isInvalid={!!form.formState.errors.ticketTypes?.[index]?.name}>
+                      <HStack
+                        key={field.id}
+                        align="flex-end"
+                        spacing={2}
+                        p={3}
+                        bg="gray.50"
+                        borderRadius="md"
+                      >
+                        <FormControl
+                          flex={2}
+                          isInvalid={
+                            !!form.formState.errors.ticketTypes?.[index]?.name
+                          }
+                        >
                           <FormLabel fontSize="sm">Name</FormLabel>
                           <Input
                             size="sm"
@@ -163,23 +211,40 @@ export default function CreateEventPage() {
                             placeholder="e.g. VIP"
                           />
                         </FormControl>
-                        <FormControl flex={1} isInvalid={!!form.formState.errors.ticketTypes?.[index]?.price}>
+
+                        <FormControl
+                          flex={1}
+                          isInvalid={
+                            !!form.formState.errors.ticketTypes?.[index]?.price
+                          }
+                        >
                           <FormLabel fontSize="sm">Price ($)</FormLabel>
                           <Input
                             size="sm"
                             type="number"
                             step="0.01"
-                            {...form.register(`ticketTypes.${index}.price`, { valueAsNumber: true })}
+                            {...form.register(`ticketTypes.${index}.price`, {
+                              valueAsNumber: true,
+                            })}
                           />
                         </FormControl>
-                        <FormControl flex={1} isInvalid={!!form.formState.errors.ticketTypes?.[index]?.quantity}>
+
+                        <FormControl
+                          flex={1}
+                          isInvalid={
+                            !!form.formState.errors.ticketTypes?.[index]?.quantity
+                          }
+                        >
                           <FormLabel fontSize="sm">Qty</FormLabel>
                           <Input
                             size="sm"
                             type="number"
-                            {...form.register(`ticketTypes.${index}.quantity`, { valueAsNumber: true })}
+                            {...form.register(`ticketTypes.${index}.quantity`, {
+                              valueAsNumber: true,
+                            })}
                           />
                         </FormControl>
+
                         <IconButton
                           aria-label="Remove ticket type"
                           icon={<DeleteIcon />}
@@ -191,6 +256,7 @@ export default function CreateEventPage() {
                         />
                       </HStack>
                     ))}
+
                     <Button
                       type="button"
                       size="sm"
@@ -207,9 +273,10 @@ export default function CreateEventPage() {
                       Add ticket type
                     </Button>
                   </VStack>
-                  {form.formState.errors.ticketTypes?.root && (
+
+                  {typeof form.formState.errors.ticketTypes?.message === 'string' && (
                     <Text color="red.500" fontSize="sm" mt={1}>
-                      {form.formState.errors.ticketTypes.root.message}
+                      {form.formState.errors.ticketTypes.message}
                     </Text>
                   )}
                 </Box>
