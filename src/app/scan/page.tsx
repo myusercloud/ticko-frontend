@@ -20,82 +20,134 @@ import {
 import { Html5Qrcode } from 'html5-qrcode';
 import { useScanTicket } from '@/hooks/useTickets';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import type { ScanResult } from '@/lib/types';
+
+type ScanTicketDetails = {
+  event?: { name?: string };
+  ticketType?: { name?: string };
+  status?: string;
+};
 
 export default function ScanPage() {
   const [scanResult, setScanResult] = useState<{
     valid: boolean;
     message: string;
-    ticket?: { event?: { name: string }; ticketType?: { name: string }; status?: string };
+    ticket?: ScanTicketDetails;
   } | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const isStartingRef = useRef(false);
+
   const toast = useToast();
   const scanTicket = useScanTicket();
 
-  const startScanner = async () => {
-    setScanResult(null);
-    setCameraError(null);
-    stopScanner();
-    if (!containerRef.current) return;
-    try {
-      const scanner = new Html5Qrcode('qr-reader');
-      scannerRef.current = scanner;
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          scanner.pause();
-          setIsScanning(false);
-          handleScan(decodedText);
-        },
-        () => {}
-      );
-      setIsScanning(true);
-    } catch (err) {
-      setCameraError((err as Error).message || 'Could not access camera');
-      toast({ title: 'Camera error', description: (err as Error).message, status: 'error' });
-    }
-  };
-
-  const stopScanner = () => {
+  const stopScanner = async () => {
     const scanner = scannerRef.current;
-    if (scanner) {
-      scanner.stop().catch(() => {});
-      scannerRef.current = null;
+
+    if (!scanner) {
+      setIsScanning(false);
+      return;
     }
+
+    try {
+      await scanner.stop();
+    } catch {
+      // Ignore stop failures when scanner is already stopped.
+    }
+
+    try {
+      await scanner.clear();
+    } catch {
+      // Ignore clear failures.
+    }
+
+    scannerRef.current = null;
     setIsScanning(false);
   };
 
   const handleScan = async (qrPayload: string) => {
     try {
       const ticketId = qrPayload.trim();
-      const res = await scanTicket.mutateAsync({ ticketId, qrPayload: ticketId });
-      const data = res.data as { valid: boolean; message: string; ticket?: unknown };
+      const res = await scanTicket.mutateAsync({
+        ticketId,
+        qrPayload: ticketId,
+      });
+
+      const data = res.data as ScanResult;
+
       setScanResult({
         valid: data.valid,
         message: data.message ?? (data.valid ? 'Ticket valid' : 'Invalid ticket'),
-        ticket: data.ticket as typeof scanResult extends null ? null : NonNullable<typeof scanResult>['ticket'],
+        ticket: data.ticket
+          ? {
+              event: { name: data.ticket.event?.name },
+              ticketType: { name: data.ticket.ticketType?.name },
+              status: data.ticket.status,
+            }
+          : undefined,
       });
-      if (data.valid) {
-        toast({ title: 'Ticket valid', status: 'success' });
-      } else {
-        toast({ title: data.message ?? 'Invalid', status: 'warning' });
-      }
+
+      toast({
+        title: data.valid ? 'Ticket valid' : 'Invalid ticket',
+        status: data.valid ? 'success' : 'warning',
+      });
     } catch (err) {
       setScanResult({
         valid: false,
         message: (err as Error).message ?? 'Scan failed',
       });
-      toast({ title: (err as Error).message, status: 'error' });
+
+      toast({
+        title: 'Scan failed',
+        description: (err as Error).message,
+        status: 'error',
+      });
     }
-    startScanner();
+  };
+
+  const startScanner = async () => {
+    if (isStartingRef.current) return;
+
+    isStartingRef.current = true;
+    setScanResult(null);
+    setCameraError(null);
+
+    await stopScanner();
+
+    try {
+      const scanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          await stopScanner();
+          await handleScan(decodedText);
+        },
+        () => {}
+      );
+
+      setIsScanning(true);
+    } catch (err) {
+      setCameraError((err as Error).message || 'Could not access camera');
+      toast({
+        title: 'Camera error',
+        description: (err as Error).message,
+        status: 'error',
+      });
+      scannerRef.current = null;
+      setIsScanning(false);
+    } finally {
+      isStartingRef.current = false;
+    }
   };
 
   useEffect(() => {
     return () => {
-      stopScanner();
+      void stopScanner();
     };
   }, []);
 
@@ -113,7 +165,6 @@ export default function ScanPage() {
           <CardBody>
             <VStack spacing={4} align="stretch">
               <Box
-                ref={containerRef}
                 id="qr-reader"
                 w="100%"
                 minH="280px"
@@ -121,6 +172,7 @@ export default function ScanPage() {
                 overflow="hidden"
                 bg="black"
               />
+
               {cameraError && (
                 <Alert status="error" borderRadius="md">
                   <AlertIcon />
@@ -130,13 +182,19 @@ export default function ScanPage() {
                   </Box>
                 </Alert>
               )}
-              {!isScanning && !cameraError && (
-                <Button colorScheme="brand" onClick={startScanner} width="full">
+
+              {!isScanning ? (
+                <Button
+                  colorScheme="brand"
+                  onClick={startScanner}
+                  width="full"
+                  isLoading={isStartingRef.current}
+                  loadingText="Starting camera..."
+                >
                   Start camera
                 </Button>
-              )}
-              {isScanning && (
-                <Button variant="outline" onClick={stopScanner} width="full">
+              ) : (
+                <Button variant="outline" onClick={() => void stopScanner()} width="full">
                   Stop scanning
                 </Button>
               )}
@@ -160,13 +218,15 @@ export default function ScanPage() {
             alignItems="flex-start"
           >
             <AlertIcon />
-            <AlertTitle>{scanResult.valid ? 'Valid ticket' : 'Invalid'}</AlertTitle>
+            <AlertTitle>{scanResult.valid ? 'Valid ticket' : 'Invalid ticket'}</AlertTitle>
             <AlertDescription>
               {scanResult.message}
               {scanResult.ticket?.event?.name && (
                 <Text mt={2}>
                   Event: {scanResult.ticket.event.name}
-                  {scanResult.ticket.ticketType?.name && ` · ${scanResult.ticket.ticketType.name}`}
+                  {scanResult.ticket.ticketType?.name
+                    ? ` · ${scanResult.ticket.ticketType.name}`
+                    : ''}
                 </Text>
               )}
             </AlertDescription>
