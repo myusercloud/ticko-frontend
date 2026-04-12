@@ -5,7 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import { MainContent } from '@/components/MainContent';
 
 export const metadata: Metadata = {
-  title: 'Ticko — Event Ticketing',
+  title: 'Ticko - Event Ticketing',
   description: 'Discover and book events. Your tickets, one place.',
 };
 
