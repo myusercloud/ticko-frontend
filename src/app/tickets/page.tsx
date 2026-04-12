@@ -13,29 +13,11 @@ import {
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import { useTickets } from '@/hooks/useTickets';
-import { useAuth } from '@/hooks/useAuth';
 import { TicketCard } from '@/components/TicketCard';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 export default function TicketsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { data: tickets, isLoading, error } = useTickets();
-
-  if (!authLoading && !isAuthenticated) {
-    return (
-      <Container maxW="4xl" py={12} textAlign="center">
-        <Heading size="md" mb={4}>
-          My Tickets
-        </Heading>
-        <Text color="gray.600" mb={4}>
-          Log in to view your tickets.
-        </Text>
-        <Button as={Link} href="/auth/login?redirect=/tickets" colorScheme="brand">
-          Log in
-        </Button>
-      </Container>
-    );
-  }
 
   return (
     <ProtectedRoute>
@@ -43,6 +25,7 @@ export default function TicketsPage() {
         <Heading size="lg" mb={2}>
           My Tickets
         </Heading>
+
         <Text color="gray.600" mb={6}>
           Your upcoming events and QR codes for entry
         </Text>
