@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Container,
   Heading,
@@ -31,23 +33,41 @@ const schema = z
     path: ['confirmPassword'],
   });
 
-type RegisterForm = z.infer<typeof schema>;
+type RegisterFormValues = z.infer<typeof schema>;
 
 export default function RegisterPage() {
-  const { register: registerUser, isRegistering, registerError } = useAuth();
+  const router = useRouter();
+  const {
+    register: registerUser,
+    isRegistering,
+    registerError,
+    isAuthenticated,
+  } = useAuth();
 
-  const form = useForm<RegisterForm>({
+  const form = useForm<RegisterFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '', confirmPassword: '', name: '' },
+    defaultValues: {
+      email: '',
+      password: '',
+      confirmPassword: '',
+      name: '',
+    },
   });
 
-  const onSubmit = form.handleSubmit((data) =>
-    registerUser({
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+      router.refresh();
+    }
+  }, [isAuthenticated, router]);
+
+  const onSubmit = form.handleSubmit(async (data) => {
+    await registerUser({
       email: data.email,
       password: data.password,
       name: data.name || undefined,
-    })
-  );
+    });
+  });
 
   return (
     <Container maxW="md" py={12} px={4}>
@@ -56,6 +76,7 @@ export default function RegisterPage() {
           <Heading size="lg" mb={2} textAlign="center">
             Create your account
           </Heading>
+
           <Text color="gray.600" textAlign="center" mb={6}>
             Join Ticko to buy and manage tickets
           </Text>
@@ -69,10 +90,24 @@ export default function RegisterPage() {
 
           <form onSubmit={onSubmit}>
             <VStack spacing={4} align="stretch">
-              <FormInput name="name" control={form.control} label="Name (optional)" />
-              <FormInput name="email" control={form.control} label="Email" type="email" />
-              <FormInput name="password" control={form.control} label="Password" type="password" />
-              <FormInput
+              <FormInput<RegisterFormValues>
+                name="name"
+                control={form.control}
+                label="Name (optional)"
+              />
+              <FormInput<RegisterFormValues>
+                name="email"
+                control={form.control}
+                label="Email"
+                type="email"
+              />
+              <FormInput<RegisterFormValues>
+                name="password"
+                control={form.control}
+                label="Password"
+                type="password"
+              />
+              <FormInput<RegisterFormValues>
                 name="confirmPassword"
                 control={form.control}
                 label="Confirm password"
