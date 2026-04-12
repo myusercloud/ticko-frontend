@@ -1,9 +1,8 @@
 'use client';
 
 import { Suspense, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  Box,
   Container,
   Heading,
   Text,
@@ -27,33 +26,41 @@ const schema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
-type LoginForm = z.infer<typeof schema>;
+type LoginFormValues = z.infer<typeof schema>;
 
-function LoginForm() {
+function LoginFormContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const redirect = searchParams.get('redirect') ?? '/';
   const { login, isLoggingIn, loginError, isAuthenticated } = useAuth();
 
-  const form = useForm<LoginForm>({
+  const form = useForm<LoginFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: {
+      email: '',
+      password: '',
+    },
   });
 
   useEffect(() => {
     if (isAuthenticated) {
-      window.location.href = redirect;
+      router.replace(redirect);
+      router.refresh();
     }
-  }, [isAuthenticated, redirect]);
+  }, [isAuthenticated, redirect, router]);
 
-  const onSubmit = form.handleSubmit((data) => login(data));
+  const onSubmit = form.handleSubmit(async (data) => {
+    await login(data);
+  });
 
   return (
-    <Container maxW="md" py={12} px={4} as="div">
+    <Container maxW="md" py={12} px={4}>
       <Card bg="white" boxShadow="md">
         <CardBody p={8}>
           <Heading size="lg" mb={2} textAlign="center">
             Log in to Ticko
           </Heading>
+
           <Text color="gray.600" textAlign="center" mb={6}>
             Enter your credentials
           </Text>
@@ -67,8 +74,18 @@ function LoginForm() {
 
           <form onSubmit={onSubmit}>
             <VStack spacing={4} align="stretch">
-              <FormInput name="email" control={form.control} label="Email" type="email" />
-              <FormInput name="password" control={form.control} label="Password" type="password" />
+              <FormInput<LoginFormValues>
+                name="email"
+                control={form.control}
+                label="Email"
+                type="email"
+              />
+              <FormInput<LoginFormValues>
+                name="password"
+                control={form.control}
+                label="Password"
+                type="password"
+              />
               <Button
                 type="submit"
                 colorScheme="brand"
@@ -95,8 +112,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<Container maxW="md" py={12} px={4}><Text textAlign="center">Loading...</Text></Container>}>
-      <LoginForm />
+    <Suspense
+      fallback={
+        <Container maxW="md" py={12} px={4}>
+          <Text textAlign="center">Loading...</Text>
+        </Container>
+      }
+    >
+      <LoginFormContent />
     </Suspense>
   );
 }
