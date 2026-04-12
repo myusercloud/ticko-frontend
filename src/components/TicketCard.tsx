@@ -1,20 +1,37 @@
 'use client';
 
-import { Box, Card, CardBody, Heading, Text, Badge, Flex } from '@chakra-ui/react';
+import {
+  Box,
+  Card,
+  CardBody,
+  Heading,
+  Text,
+  Badge,
+  Flex,
+} from '@chakra-ui/react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Ticket } from '@/lib/types';
 
 function formatDate(dateStr?: string) {
   if (!dateStr) return '—';
-  try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+
+  return parsed.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getVenueLabel(
+  venue?: { name: string; city?: string } | string | null
+): string {
+  if (!venue) return '—';
+  if (typeof venue === 'string') return venue;
+  if (venue.city) return `${venue.name} • ${venue.city}`;
+  return venue.name;
 }
 
 interface TicketCardProps {
@@ -31,7 +48,11 @@ export function TicketCard({ ticket }: TicketCardProps) {
   return (
     <Card bg="white" overflow="hidden" borderWidth="1px">
       <CardBody p={4}>
-        <Flex align="flex-start" gap={4} direction={{ base: 'column', sm: 'row' }}>
+        <Flex
+          align="flex-start"
+          gap={4}
+          direction={{ base: 'column', sm: 'row' }}
+        >
           <Box
             flexShrink={0}
             p={3}
@@ -42,24 +63,28 @@ export function TicketCard({ ticket }: TicketCardProps) {
           >
             <QRCodeSVG value={qrPayload} size={120} level="M" />
           </Box>
+
           <Box flex={1} minW={0}>
             <Badge
-              colorScheme={
-                isCancelled ? 'red' : isUsed ? 'orange' : 'green'
-              }
+              colorScheme={isCancelled ? 'red' : isUsed ? 'orange' : 'green'}
               mb={2}
+              textTransform="capitalize"
             >
               {ticket.status}
             </Badge>
+
             <Heading size="sm" mb={1}>
               {event?.name ?? 'Event'}
             </Heading>
+
             <Text fontSize="sm" color="gray.600">
-              {ticketType?.name ?? 'Ticket'} • {event?.venue ?? '—'}
+              {ticketType?.name ?? 'Ticket'} • {getVenueLabel(event?.venue)}
             </Text>
+
             <Text fontSize="xs" color="gray.500" mt={1}>
-              {event?.date ? formatDate(event.date) : '—'}
+              {formatDate(event?.startTime ?? event?.date)}
             </Text>
+
             {ticket.purchasedAt && (
               <Text fontSize="xs" color="gray.400" mt={1}>
                 Purchased {formatDate(ticket.purchasedAt)}
