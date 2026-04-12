@@ -20,7 +20,10 @@ interface TicketTypeSelectorProps {
   name?: string;
 }
 
-export function TicketTypeSelector({ ticketTypes, name = 'quantities' }: TicketTypeSelectorProps) {
+export function TicketTypeSelector({
+  ticketTypes,
+  name = 'quantities',
+}: TicketTypeSelectorProps) {
   const { register, setValue, watch } = useFormContext();
   const quantities = watch(name) as Record<string, number> | undefined;
 
@@ -29,29 +32,39 @@ export function TicketTypeSelector({ ticketTypes, name = 'quantities' }: TicketT
       <Text fontWeight="medium" mb={3}>
         Select quantity per ticket type
       </Text>
+
       <Flex flexDirection="column" gap={4}>
         {ticketTypes.map((tt) => {
           const key = tt.id;
-          const max = tt.available ?? tt.quantity ?? 10;
+          const max = tt.available ?? tt.quantity ?? tt.capacity ?? 10;
           const value = quantities?.[key] ?? 0;
+
           return (
             <FormControl key={tt.id}>
               <FormLabel fontSize="sm">
-                {tt.name} — ${Number(tt.price).toFixed(2)}
+                {tt.name} - ${Number(tt.price).toFixed(2)}
                 {max > 0 && (
                   <Text as="span" fontWeight="normal" color="gray.500" ml={2}>
-                    (up to {max} left)
+                    ({max} left)
                   </Text>
                 )}
               </FormLabel>
+
               <NumberInput
                 min={0}
                 max={max}
                 value={value}
-                onChange={(_, val) => {
-                  setValue(`${name}.${key}`, isNaN(val) ? 0 : val, {
-                    shouldValidate: true,
-                  });
+                clampValueOnBlur
+                onChange={(_, valueAsNumber) => {
+                  setValue(
+                    `${name}.${key}`,
+                    Number.isNaN(valueAsNumber) ? 0 : valueAsNumber,
+                    {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                      shouldTouch: true,
+                    }
+                  );
                 }}
               >
                 <NumberInputField
