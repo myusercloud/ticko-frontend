@@ -28,19 +28,8 @@ import { CalendarIcon } from '@chakra-ui/icons';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { TicketTypeSelector } from '@/components/TicketTypeSelector';
-// import { ordersApi } from '@/lib/api';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface TicketType {
-  id: string;
-  name: string;
-  description?: string;
-  price: number | string;
-  capacity: number;
-}
-
-// ─── Schema ───────────────────────────────────────────────────────────────────
+import { ordersApi } from '@/lib/api';
+import type { TicketType } from '@/lib/types';
 
 const quantitiesSchema = z
   .object({
@@ -53,21 +42,18 @@ const quantitiesSchema = z
 
 type QuantitiesForm = z.infer<typeof quantitiesSchema>;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function formatDate(dateStr: string) {
-  try {
-    return new Date(dateStr).toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return dateStr;
-  }
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+
+  return parsed.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatCurrency(amount: number) {
@@ -77,7 +63,13 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-// ─── Order summary sidebar ────────────────────────────────────────────────────
+function getVenueLabel(
+  venue?: { name: string; city?: string } | string | null
+) {
+  if (!venue) return 'Venue TBA';
+  if (typeof venue === 'string') return venue;
+  return venue.city ? `${venue.name}, ${venue.city}` : venue.name;
+}
 
 function OrderSummary({
   ticketTypes,
@@ -128,9 +120,14 @@ function OrderSummary({
           </>
         )}
 
-        {/* Ticket type price list (always visible) */}
         <Divider my={4} />
-        <Text fontSize="xs" color="gray.400" mb={2} textTransform="uppercase" letterSpacing="wide">
+        <Text
+          fontSize="xs"
+          color="gray.400"
+          mb={2}
+          textTransform="uppercase"
+          letterSpacing="wide"
+        >
           Ticket prices
         </Text>
         <Flex direction="column" gap={1}>
@@ -139,7 +136,9 @@ function OrderSummary({
               <Text color="gray.600" noOfLines={1}>
                 {tt.name}
               </Text>
-              <Text color="gray.500">{formatCurrency(Number(tt.price))}</Text>
+              <Text color="gray.500">
+                {formatCurrency(Number(tt.price))}
+              </Text>
             </Flex>
           ))}
         </Flex>
@@ -148,14 +147,11 @@ function OrderSummary({
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function EventDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // Correctly unwrap the params promise
   const { id } = use(params);
 
   const router = useRouter();
@@ -163,15 +159,15 @@ export default function EventDetailPage({
   const { data: event, isLoading, error } = useEvent(id);
   const { isAuthenticated } = useAuth();
 
-  // Build stable default quantities whenever ticketTypes change
+  const ticketTypes = event?.ticketTypes ?? [];
+
   const defaultQuantities = useMemo(
     () =>
-      (event?.ticketTypes ?? []).reduce<Record<string, number>>(
-        (acc, tt) => ({ ...acc, [tt.id]: 0 }),
-        {}
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [event?.id]
+      ticketTypes.reduce<Record<string, number>>((acc, tt) => {
+        acc[tt.id] = 0;
+        return acc;
+      }, {}),
+    [ticketTypes]
   );
 
   const form = useForm<QuantitiesForm>({
@@ -179,20 +175,18 @@ export default function EventDetailPage({
     defaultValues: { quantities: defaultQuantities },
   });
 
-  // Reset form when event loads (avoids stale defaults)
   useEffect(() => {
     form.reset({ quantities: defaultQuantities });
   }, [defaultQuantities, form]);
 
-  // Watch quantities for the live order summary
   const watchedQuantities = form.watch('quantities') ?? {};
 
-  // ── Submit ── create one order for all selected ticket types
   const onSubmit = async (data: QuantitiesForm) => {
     if (!event) return;
 
     if (!isAuthenticated) {
       toast({ title: 'Please log in to buy tickets', status: 'warning' });
+      router.push(`/auth/login?redirect=/events/${event.id}`);
       return;
     }
 
@@ -201,14 +195,19 @@ export default function EventDetailPage({
       .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
 
     try {
-      const order = await ordersApi.create({ eventId: event.id, items });
+      const res = await ordersApi.create({ eventId: event.id, items });
+      const order = res.data;
+
       toast({
         title: 'Order created',
-        description: 'Redirecting to checkout…',
+        description: 'Checkout page is not built yet.',
         status: 'success',
-        duration: 2000,
+        duration: 2500,
       });
-      router.push(`/checkout/${order.id}`);
+
+      if (order?.id) {
+        console.log('Created order id:', order.id);
+      }
     } catch (err) {
       toast({
         title: 'Could not create order',
@@ -218,7 +217,6 @@ export default function EventDetailPage({
     }
   };
 
-  // ── Error state ──────────────────────────────────────────────────────────
   if (error) {
     return (
       <Container maxW="4xl" py={8}>
@@ -230,7 +228,6 @@ export default function EventDetailPage({
     );
   }
 
-  // ── Loading state ────────────────────────────────────────────────────────
   if (isLoading || !event) {
     return (
       <Container maxW="4xl" py={8}>
@@ -238,30 +235,28 @@ export default function EventDetailPage({
         <Skeleton height="20px" borderRadius="md" mb={8} width="40%" />
         <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
           <Skeleton flex={1} height="360px" borderRadius="lg" />
-          <Skeleton w={{ base: '100%', lg: '280px' }} height="260px" borderRadius="lg" flexShrink={0} />
+          <Skeleton
+            w={{ base: '100%', lg: '280px' }}
+            height="260px"
+            borderRadius="lg"
+            flexShrink={0}
+          />
         </Flex>
       </Container>
     );
   }
 
-  const venueName = typeof event.venue === 'string'
-    ? event.venue
-    : `${event.venue?.name}, ${event.venue?.city}`;
-
   const isPast = new Date(event.startTime) < new Date();
+  const venueName = getVenueLabel(event.venue);
 
   return (
     <Container maxW="4xl" py={8} px={4}>
-
-      {/* Event header */}
       <Box mb={8}>
         <HStack mb={2} gap={2}>
-          {!event.isPublished && (
+          {event.isPublished === false && (
             <Badge colorScheme="yellow">Draft</Badge>
           )}
-          {isPast && (
-            <Badge colorScheme="gray">Past event</Badge>
-          )}
+          {isPast && <Badge colorScheme="gray">Past event</Badge>}
         </HStack>
 
         <Heading size="xl" mb={3}>
@@ -286,8 +281,6 @@ export default function EventDetailPage({
       </Box>
 
       <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
-
-        {/* Left column */}
         <Box flex={1} minW={0}>
           {event.description && (
             <Card variant="outline" mb={4}>
@@ -317,7 +310,7 @@ export default function EventDetailPage({
                 <FormProvider {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
                     <TicketTypeSelector
-                      ticketTypes={event.ticketTypes ?? []}
+                      ticketTypes={ticketTypes}
                       name="quantities"
                     />
 
@@ -332,10 +325,10 @@ export default function EventDetailPage({
                         <Button
                           type="submit"
                           colorScheme="brand"
-                          loadingText="Creating order…"
+                          loadingText="Creating order..."
                           isLoading={form.formState.isSubmitting}
                         >
-                          Proceed to checkout
+                          Create order
                         </Button>
                       ) : (
                         <Button
@@ -354,11 +347,10 @@ export default function EventDetailPage({
           )}
         </Box>
 
-        {/* Right sidebar — order summary */}
-        {!isPast && (event.ticketTypes ?? []).length > 0 && (
+        {!isPast && ticketTypes.length > 0 && (
           <Box w={{ base: '100%', lg: '280px' }} flexShrink={0}>
             <OrderSummary
-              ticketTypes={event.ticketTypes ?? []}
+              ticketTypes={ticketTypes}
               quantities={watchedQuantities}
             />
           </Box>

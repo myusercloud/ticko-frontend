@@ -2,6 +2,6 @@
   "/tickets/page": "app/tickets/page.js",
   "/auth/register/page": "app/auth/register/page.js",
   "/events/[id]/page": "app/events/[id]/page.js",
-  "/page": "app/page.js",
-  "/dashboard/page": "app/dashboard/page.js"
+  "/dashboard/page": "app/dashboard/page.js",
+  "/page": "app/page.js"
 }
