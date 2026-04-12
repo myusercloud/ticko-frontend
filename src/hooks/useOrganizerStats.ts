@@ -1,25 +1,21 @@
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
+import { dashboardApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
-
-export interface OrganizerStats {
-  totalTicketsSold: number;
-  totalRevenue: number;
-  checkInRate: number | null; // percentage, last completed event
-}
-
-async function fetchOrganizerStats(): Promise<OrganizerStats> {
-  const res = await fetch('/api/organizer/stats');
-  if (!res.ok) throw new Error('Failed to load stats');
-  return res.json();
-}
+import type { OrganizerStats } from '@/lib/types';
 
 export function useOrganizerStats() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  return useQuery<OrganizerStats>({
+  return useQuery({
     queryKey: ['organizer-stats', user?.id],
-    queryFn: fetchOrganizerStats,
-    enabled: !!user,
+    queryFn: async () => {
+      const res = await dashboardApi.organizerStats();
+      return res.data as OrganizerStats;
+    },
+    enabled: isAuthenticated && !!user?.id,
     staleTime: 60_000,
+    retry: false,
   });
 }
