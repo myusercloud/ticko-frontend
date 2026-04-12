@@ -7,7 +7,6 @@ import {
   Link as ChakraLink,
   useDisclosure,
   Drawer,
-  DrawerBody,
   DrawerOverlay,
   DrawerContent,
   DrawerCloseButton,
@@ -34,6 +33,11 @@ const fadeDown = keyframes`
   to   { opacity: 1; transform: translateY(0); }
 `;
 
+function isActivePath(pathname: string, href: string) {
+  if (href === '/') return pathname === '/';
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Navbar() {
   const pathname = usePathname();
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -50,7 +54,6 @@ export function Navbar() {
       borderBottom="1px solid rgba(245,239,230,0.1)"
       animation={`${fadeDown} 0.4s ease both`}
     >
-      {/* amber top accent line */}
       <Box h="1px" bg="rgba(212,140,40,0.5)" />
 
       <Flex
@@ -62,7 +65,6 @@ export function Navbar() {
         justify="space-between"
         gap={4}
       >
-        {/* ── Wordmark ── */}
         <ChakraLink
           as={Link}
           href="/"
@@ -79,7 +81,6 @@ export function Navbar() {
           Ticko
         </ChakraLink>
 
-        {/* ── Desktop nav links ── */}
         <Stack
           direction="row"
           spacing={7}
@@ -87,7 +88,8 @@ export function Navbar() {
           align="center"
         >
           {navLinks.map((link) => {
-            const isActive = pathname === link.href;
+            const active = isActivePath(pathname, link.href);
+
             return (
               <ChakraLink
                 key={link.href}
@@ -98,12 +100,12 @@ export function Navbar() {
                 fontWeight="500"
                 letterSpacing="0.06em"
                 textTransform="uppercase"
-                color={isActive ? '#d48c28' : 'rgba(245,239,230,0.55)'}
+                color={active ? '#d48c28' : 'rgba(245,239,230,0.55)'}
                 position="relative"
                 _hover={{ color: '#f5efe6', textDecoration: 'none' }}
                 transition="color 0.15s"
                 _after={
-                  isActive
+                  active
                     ? {
                         content: '""',
                         position: 'absolute',
@@ -113,7 +115,7 @@ export function Navbar() {
                         height: '1px',
                         bg: '#d48c28',
                       }
-                    : {}
+                    : undefined
                 }
               >
                 {link.label}
@@ -122,7 +124,6 @@ export function Navbar() {
           })}
         </Stack>
 
-        {/* ── Auth area ── */}
         <Flex align="center" gap={3}>
           {isLoading ? (
             <Spinner size="sm" color="rgba(245,239,230,0.4)" />
@@ -160,7 +161,7 @@ export function Navbar() {
                   bg: 'rgba(245,239,230,0.06)',
                 }}
                 transition="all 0.15s"
-                onClick={() => logout()}
+                onClick={logout}
               >
                 Logout
               </Button>
@@ -212,7 +213,6 @@ export function Navbar() {
             </>
           )}
 
-          {/* ── Mobile burger ── */}
           <IconButton
             aria-label="Open menu"
             icon={<HamburgerIcon />}
@@ -228,7 +228,6 @@ export function Navbar() {
         </Flex>
       </Flex>
 
-      {/* ── Mobile Drawer ── */}
       <Drawer placement="right" onClose={onClose} isOpen={isOpen} size="xs">
         <DrawerOverlay bg="rgba(10,9,8,0.7)" backdropFilter="blur(4px)" />
         <DrawerContent
@@ -243,8 +242,12 @@ export function Navbar() {
             right={5}
           />
 
-          {/* drawer wordmark */}
-          <Box px={6} pt={6} pb={4} borderBottom="1px solid rgba(245,239,230,0.1)">
+          <Box
+            px={6}
+            pt={6}
+            pb={4}
+            borderBottom="1px solid rgba(245,239,230,0.1)"
+          >
             <Text
               fontFamily="'DM Serif Display', Georgia, serif"
               fontStyle="italic"
@@ -259,7 +262,8 @@ export function Navbar() {
           <Box px={6} pt={6}>
             <Stack spacing={0}>
               {navLinks.map((link) => {
-                const isActive = pathname === link.href;
+                const active = isActivePath(pathname, link.href);
+
                 return (
                   <ChakraLink
                     key={link.href}
@@ -273,7 +277,7 @@ export function Navbar() {
                     fontWeight="500"
                     letterSpacing="0.08em"
                     textTransform="uppercase"
-                    color={isActive ? '#d48c28' : 'rgba(245,239,230,0.55)'}
+                    color={active ? '#d48c28' : 'rgba(245,239,230,0.55)'}
                     borderBottom="1px solid rgba(245,239,230,0.07)"
                     _hover={{ color: '#f5efe6', textDecoration: 'none' }}
                     transition="color 0.15s"
@@ -301,9 +305,15 @@ export function Navbar() {
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
-                  _hover={{ color: '#f5efe6', borderColor: 'rgba(245,239,230,0.35)' }}
+                  _hover={{
+                    color: '#f5efe6',
+                    borderColor: 'rgba(245,239,230,0.35)',
+                  }}
                   transition="all 0.15s"
-                  onClick={() => { logout(); onClose(); }}
+                  onClick={() => {
+                    logout();
+                    onClose();
+                  }}
                 >
                   Logout
                 </Button>
@@ -327,7 +337,11 @@ export function Navbar() {
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
-                    _hover={{ color: '#f5efe6', borderColor: 'rgba(245,239,230,0.35)', textDecoration: 'none' }}
+                    _hover={{
+                      color: '#f5efe6',
+                      borderColor: 'rgba(245,239,230,0.35)',
+                      textDecoration: 'none',
+                    }}
                     transition="all 0.15s"
                   >
                     Log in
