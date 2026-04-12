@@ -1,6 +1,15 @@
 'use client';
 
-import { Box, Grid, Heading, Stat, StatLabel, StatNumber, StatHelpText } from '@chakra-ui/react';
+import {
+  Box,
+  Grid,
+  Heading,
+  Stat,
+  StatLabel,
+  StatNumber,
+  StatHelpText,
+  Skeleton,
+} from '@chakra-ui/react';
 import type { EventStats } from '@/lib/types';
 
 interface DashboardStatsProps {
@@ -22,25 +31,28 @@ function StatCard({
       <Stat>
         <StatLabel color="gray.600">{label}</StatLabel>
         <StatNumber fontSize="2xl">{value}</StatNumber>
-        {helpText && <StatHelpText>{helpText}</StatHelpText>}
+        {helpText ? <StatHelpText>{helpText}</StatHelpText> : null}
       </Stat>
     </Box>
   );
 }
 
-export function DashboardStats({ stats, isLoading }: DashboardStatsProps) {
+function formatCurrency(amount: number) {
+  return `$${Number(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function DashboardStats({
+  stats,
+  isLoading = false,
+}: DashboardStatsProps) {
   if (isLoading) {
     return (
       <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
         {[1, 2, 3].map((i) => (
-          <Box
-            key={i}
-            bg="gray.100"
-            p={5}
-            borderRadius="lg"
-            boxShadow="sm"
-            h="24"
-          />
+          <Skeleton key={i} height="96px" borderRadius="lg" />
         ))}
       </Grid>
     );
@@ -48,21 +60,30 @@ export function DashboardStats({ stats, isLoading }: DashboardStatsProps) {
 
   const revenue = stats?.totalRevenue ?? 0;
   const sold = stats?.ticketsSold ?? 0;
-  const attendance = stats?.attendance ?? sold;
+  const attendance = stats?.attendance ?? 0;
 
   return (
     <Box>
       <Heading size="sm" mb={4} color="gray.600">
         Event statistics
       </Heading>
+
       <Grid templateColumns={{ base: '1fr', md: 'repeat(3, 1fr)' }} gap={4}>
         <StatCard
           label="Revenue"
-          value={`$${Number(revenue).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+          value={formatCurrency(revenue)}
           helpText="Total sales"
         />
-        <StatCard label="Tickets sold" value={sold} helpText="Total tickets" />
-        <StatCard label="Attendance" value={attendance} helpText="Checked in" />
+        <StatCard
+          label="Tickets sold"
+          value={sold}
+          helpText="Total tickets"
+        />
+        <StatCard
+          label="Attendance"
+          value={attendance}
+          helpText="Checked in"
+        />
       </Grid>
     </Box>
   );
