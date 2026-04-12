@@ -32,29 +32,12 @@ import Link from 'next/link';
 import { CalendarIcon, TriangleUpIcon } from '@chakra-ui/icons';
 import { useEvents } from '@/hooks/useEvents';
 import { useOrganizerStats } from '@/hooks/useOrganizerStats';
-import { EventCard } from '@/components/EventCard';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { useAuth } from '@/hooks/useAuth';
+import type { Event } from '@/lib/types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface EventSummary {
-  id: string;
-  name: string;
-  startTime: string;
-  endTime?: string;
-  isPublished: boolean;
-  totalCapacity: number;
-  venue: { name: string; city: string };
-  _count?: { orders: number };
-  ticketsSold?: number;
-  revenue?: number;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getEventStatus(event: EventSummary): 'upcoming' | 'past' | 'draft' {
-  if (!event.isPublished) return 'draft';
+function getEventStatus(event: Event): 'upcoming' | 'past' | 'draft' {
+  if (event.isPublished === false) return 'draft';
   if (new Date(event.startTime) < new Date()) return 'past';
   return 'upcoming';
 }
@@ -63,6 +46,7 @@ function formatRelativeDate(dateStr: string): string {
   const diff = Math.ceil(
     (new Date(dateStr).getTime() - Date.now()) / 86_400_000
   );
+
   if (diff < 0) return 'Ended';
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Tomorrow';
@@ -70,7 +54,10 @@ function formatRelativeDate(dateStr: string): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-GB', {
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return dateStr;
+
+  return parsed.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -83,16 +70,36 @@ function formatCurrency(amount: number): string {
   return `$${amount.toFixed(0)}`;
 }
 
+function getVenueLabel(event: Event): string {
+  if (!event.venue) return 'Venue TBA';
+  if (typeof event.venue === 'string') return event.venue;
+  return event.venue.city
+    ? `${event.venue.name}, ${event.venue.city}`
+    : event.venue.name;
+}
+
+function getTotalCapacity(event: Event): number {
+  if (typeof event.totalCapacity === 'number') return event.totalCapacity;
+
+  return (event.ticketTypes ?? []).reduce(
+    (sum, tt) => sum + Number(tt.quantity ?? 0),
+    0
+  );
+}
+
+function getTicketsSold(event: Event): number {
+  if (typeof event.ticketsSold === 'number') return event.ticketsSold;
+  return event._count?.orders ?? 0;
+}
+
 const STATUS_BADGE: Record<
   'upcoming' | 'past' | 'draft',
   { label: string; colorScheme: string }
 > = {
-  upcoming: { label: 'Published',  colorScheme: 'green'  },
-  past:     { label: 'Ended',      colorScheme: 'gray'   },
-  draft:    { label: 'Draft',      colorScheme: 'yellow' },
+  upcoming: { label: 'Published', colorScheme: 'green' },
+  past: { label: 'Ended', colorScheme: 'gray' },
+  draft: { label: 'Draft', colorScheme: 'yellow' },
 };
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function MetricCard({
   label,
@@ -106,7 +113,6 @@ function MetricCard({
   return (
     <Stat
       bg="gray.50"
-      _dark={{ bg: 'whiteAlpha.50' }}
       borderRadius="md"
       px={4}
       py={3}
@@ -122,18 +128,17 @@ function MetricCard({
   );
 }
 
-function EventCardEnhanced({ event }: { event: EventSummary }) {
-  const status   = getEventStatus(event);
-  const badge    = STATUS_BADGE[status];
-  const sold     = event.ticketsSold ?? 0;
-  const capacity = event.totalCapacity;
-  const pct      = capacity > 0 ? Math.round((sold / capacity) * 100) : 0;
-  const relDate  = formatRelativeDate(event.startTime);
+function EventCardEnhanced({ event }: { event: Event }) {
+  const status = getEventStatus(event);
+  const badge = STATUS_BADGE[status];
+  const sold = getTicketsSold(event);
+  const capacity = getTotalCapacity(event);
+  const pct = capacity > 0 ? Math.round((sold / capacity) * 100) : 0;
+  const relDate = formatRelativeDate(event.startTime);
 
   return (
     <Card variant="outline" overflow="hidden">
       <CardBody p={4}>
-        {/* Header */}
         <Flex justify="space-between" align="flex-start" gap={2} mb={2}>
           <Heading size="sm" lineHeight="short" noOfLines={2}>
             {event.name}
@@ -148,7 +153,6 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
           </Badge>
         </Flex>
 
-        {/* Meta */}
         <Flex direction="column" gap={1} mb={3}>
           <HStack spacing={1} color="gray.500" fontSize="xs">
             <CalendarIcon boxSize={3} />
@@ -157,6 +161,7 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
               {status === 'upcoming' && ` · ${relDate}`}
             </Text>
           </HStack>
+
           <HStack spacing={1} color="gray.500" fontSize="xs">
             <Icon viewBox="0 0 24 24" boxSize={3}>
               <path
@@ -164,15 +169,12 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
                 d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"
               />
             </Icon>
-            <Text>
-              {event.venue.name}, {event.venue.city}
-            </Text>
+            <Text>{getVenueLabel(event)}</Text>
           </HStack>
         </Flex>
 
         <Divider mb={3} />
 
-        {/* Stats — published events */}
         {status !== 'draft' && (
           <>
             <SimpleGrid columns={3} spacing={2} mb={3} textAlign="center">
@@ -184,6 +186,7 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
                   {status === 'past' ? 'attended' : 'sold'}
                 </Text>
               </Box>
+
               <Box>
                 <Text fontWeight="500" fontSize="md">
                   {capacity.toLocaleString()}
@@ -192,11 +195,10 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
                   capacity
                 </Text>
               </Box>
+
               <Box>
                 <Text fontWeight="500" fontSize="md">
-                  {event.revenue !== undefined
-                    ? formatCurrency(event.revenue)
-                    : '—'}
+                  {event.revenue != null ? formatCurrency(event.revenue) : '—'}
                 </Text>
                 <Text fontSize="10px" color="gray.400">
                   revenue
@@ -206,14 +208,21 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
 
             {status === 'upcoming' && (
               <Box mb={3}>
-                <Flex justify="space-between" fontSize="10px" color="gray.400" mb={1}>
+                <Flex
+                  justify="space-between"
+                  fontSize="10px"
+                  color="gray.400"
+                  mb={1}
+                >
                   <Text>Capacity</Text>
                   <Text>{pct}%</Text>
                 </Flex>
                 <Progress
                   value={pct}
                   size="xs"
-                  colorScheme={pct >= 90 ? 'red' : pct >= 70 ? 'orange' : 'brand'}
+                  colorScheme={
+                    pct >= 90 ? 'red' : pct >= 70 ? 'orange' : 'brand'
+                  }
                   borderRadius="full"
                 />
               </Box>
@@ -221,14 +230,12 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
           </>
         )}
 
-        {/* Draft — no stats yet */}
         {status === 'draft' && (
           <Text fontSize="xs" color="gray.400" mb={3}>
-            No ticket types configured yet. Publish when ready.
+            This event is still in draft and can be completed before publishing.
           </Text>
         )}
 
-        {/* CTA */}
         <Button
           as={Link}
           href={`/dashboard/events/${event.id}`}
@@ -246,8 +253,6 @@ function EventCardEnhanced({ event }: { event: EventSummary }) {
     </Card>
   );
 }
-
-// ─── Skeletons ────────────────────────────────────────────────────────────────
 
 function MetricsSkeleton() {
   return (
@@ -269,11 +274,9 @@ function GridSkeleton() {
   );
 }
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
 function EmptyState() {
   return (
-    <Card bg="gray.50" _dark={{ bg: 'whiteAlpha.50' }}>
+    <Card bg="gray.50">
       <CardBody textAlign="center" py={16}>
         <Box
           w={10}
@@ -289,13 +292,16 @@ function EmptyState() {
         >
           <TriangleUpIcon color="gray.400" />
         </Box>
+
         <Heading size="sm" mb={2}>
           No events yet
         </Heading>
+
         <Text color="gray.500" fontSize="sm" maxW="260px" mx="auto" mb={6}>
           Create your first event to start selling tickets and tracking
           attendance.
         </Text>
+
         <Button
           as={Link}
           href="/dashboard/events/create"
@@ -309,35 +315,44 @@ function EmptyState() {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function DashboardPage() {
-  const { user }                            = useAuth();
-  const { data: events, isLoading, error }  = useEvents();
+  const { user } = useAuth();
+  const { data: events, isLoading, error } = useEvents();
   const { data: stats, isLoading: statsLoading } = useOrganizerStats();
 
-  const upcoming = events?.filter((e) => getEventStatus(e) === 'upcoming') ?? [];
-  const past     = events?.filter((e) => getEventStatus(e) === 'past')     ?? [];
-  const drafts   = events?.filter((e) => getEventStatus(e) === 'draft')    ?? [];
+  const allEvents = events ?? [];
+  const upcoming = allEvents.filter((e) => getEventStatus(e) === 'upcoming');
+  const past = allEvents.filter((e) => getEventStatus(e) === 'past');
+  const drafts = allEvents.filter((e) => getEventStatus(e) === 'draft');
 
   return (
     <ProtectedRoute>
       <Container maxW="7xl" py={8} px={4}>
-
-        {/* Top bar */}
-        <Flex justify="space-between" align="flex-start" mb={8} wrap="wrap" gap={4}>
+        <Flex
+          justify="space-between"
+          align="flex-start"
+          mb={8}
+          wrap="wrap"
+          gap={4}
+        >
           <Box>
             <Heading size="lg">Organizer dashboard</Heading>
             <Text color="gray.500" mt={1}>
-              {user?.name ? `Welcome back, ${user.name.split(' ')[0]}` : 'Manage your events'}
+              {user?.name
+                ? `Welcome back, ${user.name.split(' ')[0]}`
+                : 'Manage your events'}
             </Text>
           </Box>
-          <Button as={Link} href="/dashboard/events/create" colorScheme="brand">
+
+          <Button
+            as={Link}
+            href="/dashboard/events/create"
+            colorScheme="brand"
+          >
             + Create event
           </Button>
         </Flex>
 
-        {/* Error */}
         {error && (
           <Alert status="error" borderRadius="md" mb={6}>
             <AlertIcon />
@@ -345,14 +360,13 @@ export default function DashboardPage() {
           </Alert>
         )}
 
-        {/* Metrics */}
         {statsLoading ? (
           <MetricsSkeleton />
         ) : (
           <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4} mb={8}>
             <MetricCard
               label="Total events"
-              value={String(events?.length ?? 0)}
+              value={String(allEvents.length)}
               sub={`${upcoming.length} upcoming`}
             />
             <MetricCard
@@ -368,47 +382,53 @@ export default function DashboardPage() {
             <MetricCard
               label="Check-in rate"
               value={
-                stats?.checkInRate != null
-                  ? `${stats.checkInRate}%`
-                  : '—'
+                stats?.checkInRate != null ? `${stats.checkInRate}%` : '—'
               }
               sub="last completed event"
             />
           </SimpleGrid>
         )}
 
-        {/* Event tabs */}
         {isLoading ? (
           <GridSkeleton />
-        ) : !events || events.length === 0 ? (
+        ) : allEvents.length === 0 ? (
           <EmptyState />
         ) : (
           <Tabs variant="line" colorScheme="brand">
             <TabList mb={6}>
-              <Tab fontSize="sm">All ({events.length})</Tab>
+              <Tab fontSize="sm">All ({allEvents.length})</Tab>
               <Tab fontSize="sm">Upcoming ({upcoming.length})</Tab>
               <Tab fontSize="sm">Past ({past.length})</Tab>
               <Tab fontSize="sm">Drafts ({drafts.length})</Tab>
             </TabList>
 
-            {[events, upcoming, past, drafts].map((list, idx) => (
-              <TabPanel key={idx} p={0}>
-                {list.length === 0 ? (
-                  <Text color="gray.500" fontSize="sm" py={8} textAlign="center">
-                    No events in this category.
-                  </Text>
-                ) : (
-                  <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
-                    {list.map((event) => (
-                      <EventCardEnhanced key={event.id} event={event} />
-                    ))}
-                  </SimpleGrid>
-                )}
-              </TabPanel>
+            {[allEvents, upcoming, past, drafts].map((list, idx) => (
+              <TabPanels key={idx}>
+                <TabPanel p={0}>
+                  {list.length === 0 ? (
+                    <Text
+                      color="gray.500"
+                      fontSize="sm"
+                      py={8}
+                      textAlign="center"
+                    >
+                      No events in this category.
+                    </Text>
+                  ) : (
+                    <SimpleGrid
+                      columns={{ base: 1, md: 2, lg: 3 }}
+                      spacing={4}
+                    >
+                      {list.map((event) => (
+                        <EventCardEnhanced key={event.id} event={event} />
+                      ))}
+                    </SimpleGrid>
+                  )}
+                </TabPanel>
+              </TabPanels>
             ))}
           </Tabs>
         )}
-
       </Container>
     </ProtectedRoute>
   );
