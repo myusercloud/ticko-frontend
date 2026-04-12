@@ -11,8 +11,12 @@ export function useAuth() {
   const queryClient = useQueryClient();
   const token = typeof window !== 'undefined' ? getToken() : null;
 
-  const { data: user, isLoading: isLoadingUser } = useQuery({
-    queryKey: ['me'],
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    isFetched,
+  } = useQuery({
+    queryKey: ['me', token],
     queryFn: async () => {
       const res = await authApi.me();
       return res.data as User;
@@ -28,6 +32,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       setToken(data.token);
+      queryClient.setQueryData(['me', data.token], data.user);
       queryClient.setQueryData(['me'], data.user);
       router.push('/');
       router.refresh();
@@ -35,12 +40,17 @@ export function useAuth() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; name?: string }) => {
+    mutationFn: async (data: {
+      email: string;
+      password: string;
+      name?: string;
+    }) => {
       const res = await authApi.register(data);
       return res.data as { token: string; user: User };
     },
     onSuccess: (data) => {
       setToken(data.token);
+      queryClient.setQueryData(['me', data.token], data.user);
       queryClient.setQueryData(['me'], data.user);
       router.push('/');
       router.refresh();
@@ -49,7 +59,7 @@ export function useAuth() {
 
   const logout = () => {
     clearToken();
-    queryClient.clear();
+    queryClient.removeQueries({ queryKey: ['me'] });
     router.push('/');
     router.refresh();
   };
@@ -57,7 +67,7 @@ export function useAuth() {
   return {
     user,
     isAuthenticated: !!user,
-    isLoading: !!token && isLoadingUser,
+    isLoading: !!token && !isFetched && isLoadingUser,
     login: loginMutation.mutateAsync,
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
