@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -150,9 +150,9 @@ function OrderSummary({
 export default function EventDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
+  const { id } = params;
 
   const router = useRouter();
   const toast = useToast();

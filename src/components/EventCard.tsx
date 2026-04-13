@@ -6,17 +6,36 @@ import Link from 'next/link';
 import type { Event } from '@/lib/types';
 
 function formatDate(dateStr: string) {
-  try {
-    const d = new Date(dateStr);
+  const parsed = new Date(dateStr);
+
+  if (Number.isNaN(parsed.getTime())) {
     return {
-      weekday: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
-      date: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-      year: d.getFullYear().toString(),
-      time: d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+      weekday: '--',
+      day: '--',
+      month: 'DATE',
+      year: '',
+      time: '',
     };
-  } catch {
-    return { weekday: '—', date: dateStr, year: '', time: '' };
   }
+
+  return {
+    weekday: parsed
+      .toLocaleDateString(undefined, { weekday: 'short' })
+      .toUpperCase(),
+    day: parsed.toLocaleDateString(undefined, { day: 'numeric' }),
+    month: parsed.toLocaleDateString(undefined, { month: 'short' }),
+    year: parsed.getFullYear().toString(),
+    time: parsed.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  };
+}
+
+function getVenueLabel(venue?: Event['venue']) {
+  if (!venue) return 'Venue TBA';
+  if (typeof venue === 'string') return venue;
+  return venue.city ? `${venue.name}, ${venue.city}` : venue.name;
 }
 
 interface EventCardProps {
@@ -29,10 +48,13 @@ const arrowSlide = keyframes`
 `;
 
 export function EventCard({ event }: EventCardProps) {
-  const { weekday, date, year, time } = formatDate(event.startTime);
+  const { weekday, day, month, year, time } = formatDate(event.startTime);
 
   return (
-    <Link href={`/events/${event.id}`} style={{ textDecoration: 'none', display: 'block' }}>
+    <Link
+      href={`/events/${event.id}`}
+      style={{ textDecoration: 'none', display: 'block' }}
+    >
       <Box
         role="group"
         position="relative"
@@ -50,7 +72,6 @@ export function EventCard({ event }: EventCardProps) {
         flexDirection="row"
         minH="100px"
       >
-        {/* ── Date column ── */}
         <Box
           flexShrink={0}
           w="72px"
@@ -76,6 +97,7 @@ export function EventCard({ event }: EventCardProps) {
           >
             {weekday}
           </Text>
+
           <Text
             fontFamily="'DM Serif Display', Georgia, serif"
             fontSize="22px"
@@ -83,8 +105,9 @@ export function EventCard({ event }: EventCardProps) {
             color="#f5efe6"
             lineHeight="1"
           >
-            {date.split(' ')[1]}
+            {day}
           </Text>
+
           <Text
             fontFamily="'DM Sans', sans-serif"
             fontSize="10px"
@@ -92,12 +115,20 @@ export function EventCard({ event }: EventCardProps) {
             letterSpacing="0.06em"
             color="rgba(245,239,230,0.45)"
           >
-            {date.split(' ')[0]}
+            {month}
           </Text>
         </Box>
 
-        {/* ── Body ── */}
-        <Box flex={1} minW={0} px={4} py={3} display="flex" flexDirection="column" justifyContent="center" gap="4px">
+        <Box
+          flex={1}
+          minW={0}
+          px={4}
+          py={3}
+          display="flex"
+          flexDirection="column"
+          justifyContent="center"
+          gap="4px"
+        >
           <Heading
             as="h3"
             fontFamily="'DM Serif Display', Georgia, serif"
@@ -119,7 +150,7 @@ export function EventCard({ event }: EventCardProps) {
             noOfLines={1}
             letterSpacing="0.02em"
           >
-            {event.venue?.name ?? 'Venue TBA'}
+            {getVenueLabel(event.venue)}
           </Text>
 
           <Text
@@ -133,14 +164,7 @@ export function EventCard({ event }: EventCardProps) {
           </Text>
         </Box>
 
-        {/* ── Arrow CTA ── */}
-        <Box
-          flexShrink={0}
-          display="flex"
-          alignItems="center"
-          pr={4}
-          pl={2}
-        >
+        <Box flexShrink={0} display="flex" alignItems="center" pr={4} pl={2}>
           <Box
             as="span"
             fontFamily="'DM Sans', sans-serif"
@@ -157,7 +181,6 @@ export function EventCard({ event }: EventCardProps) {
           </Box>
         </Box>
 
-        {/* ── Amber left accent on hover ── */}
         <Box
           position="absolute"
           left="0"

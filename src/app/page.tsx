@@ -28,15 +28,7 @@ export default function HomePage() {
   const { data: events, isLoading, error } = useEvents();
 
   return (
-    <Box
-      minH="100vh"
-      bg="#0a0908"
-      fontFamily="'DM Serif Display', Georgia, serif"
-      sx={{
-        '@import': `url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap')`,
-      }}
-    >
-      {/* ── Hero ─────────────────────────────────────────────── */}
+    <Box minH="100vh" bg="#0a0908" fontFamily="'DM Serif Display', Georgia, serif">
       <Box
         position="relative"
         overflow="hidden"
@@ -51,7 +43,6 @@ export default function HomePage() {
           pointerEvents: 'none',
         }}
       >
-        {/* decorative ruled lines */}
         <Box
           position="absolute"
           top="0"
@@ -70,7 +61,6 @@ export default function HomePage() {
         />
 
         <Container maxW="7xl" px={{ base: 6, md: 10 }}>
-          {/* overline label */}
           <Text
             fontFamily="'DM Sans', sans-serif"
             fontSize="11px"
@@ -84,7 +74,6 @@ export default function HomePage() {
             Live Experiences&nbsp;&nbsp;·&nbsp;&nbsp;Nairobi &amp; Beyond
           </Text>
 
-          {/* headline */}
           <Heading
             as="h1"
             fontSize={{ base: '52px', md: '80px', lg: '96px' }}
@@ -116,7 +105,6 @@ export default function HomePage() {
             </Box>
           </Heading>
 
-          {/* sub-copy */}
           <Text
             fontFamily="'DM Sans', sans-serif"
             fontWeight="300"
@@ -130,7 +118,6 @@ export default function HomePage() {
           </Text>
         </Container>
 
-        {/* bottom border */}
         <Box
           position="absolute"
           bottom="0"
@@ -141,9 +128,7 @@ export default function HomePage() {
         />
       </Box>
 
-      {/* ── Events Section ───────────────────────────────────── */}
       <Container maxW="7xl" px={{ base: 6, md: 10 }} py={{ base: 10, md: 14 }}>
-        {/* section header */}
         <Box
           display="flex"
           alignItems="baseline"
@@ -162,6 +147,7 @@ export default function HomePage() {
           >
             Upcoming events
           </Heading>
+
           {!isLoading && events && events.length > 0 && (
             <Text
               fontFamily="'DM Sans', sans-serif"
@@ -175,7 +161,6 @@ export default function HomePage() {
           )}
         </Box>
 
-        {/* error */}
         {error && (
           <Alert
             status="error"
@@ -190,7 +175,6 @@ export default function HomePage() {
           </Alert>
         )}
 
-        {/* loading skeletons */}
         {isLoading ? (
           <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={5}>
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -209,19 +193,6 @@ export default function HomePage() {
               <Box
                 key={event.id}
                 animation={`${fadeUp} 0.45s ${idx * 0.06}s ease both`}
-                sx={{
-                  '& > *': {
-                    borderRadius: '4px !important',
-                    border: '1px solid rgba(245,239,230,0.1) !important',
-                    background: 'rgba(245,239,230,0.04) !important',
-                    transition: 'border-color 0.2s, transform 0.2s, background 0.2s',
-                    _hover: {
-                      borderColor: 'rgba(212,140,40,0.5) !important',
-                      background: 'rgba(245,239,230,0.07) !important',
-                      transform: 'translateY(-2px)',
-                    },
-                  },
-                }}
               >
                 <EventCard event={event} />
               </Box>
@@ -240,13 +211,12 @@ export default function HomePage() {
               fontSize="20px"
               color="rgba(245,239,230,0.35)"
             >
-              No events yet — check back soon
+              No events yet - check back soon
             </Text>
           </Box>
         )}
       </Container>
 
-      {/* ── Footer rule ──────────────────────────────────────── */}
       <Box
         borderTop="1px solid rgba(245,239,230,0.08)"
         py={8}
