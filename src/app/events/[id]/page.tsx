@@ -12,29 +12,25 @@ import {
   AlertIcon,
   useToast,
   Flex,
-  Card,
-  CardBody,
   Divider,
-  Badge,
   HStack,
-  Icon,
 } from '@chakra-ui/react';
+import { keyframes } from '@emotion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { CalendarIcon } from '@chakra-ui/icons';
 import { useEvent } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { TicketTypeSelector } from '@/components/TicketTypeSelector';
 import { ordersApi } from '@/lib/api';
 import type { TicketType } from '@/lib/types';
 
+/* ── schema ─────────────────────────────────────────────── */
+
 const quantitiesSchema = z
-  .object({
-    quantities: z.record(z.number().min(0).int()),
-  })
+  .object({ quantities: z.record(z.number().min(0).int()) })
   .refine(
     (data) => Object.values(data.quantities ?? {}).some((q) => q > 0),
     { message: 'Select at least one ticket to continue.' }
@@ -42,34 +38,39 @@ const quantitiesSchema = z
 
 type QuantitiesForm = z.infer<typeof quantitiesSchema>;
 
-function formatDate(dateStr: string) {
-  const parsed = new Date(dateStr);
-  if (Number.isNaN(parsed.getTime())) return dateStr;
+/* ── helpers ─────────────────────────────────────────────── */
 
-  return parsed.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+function formatDate(dateStr: string) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return { full: dateStr, weekday: '--', day: '--', month: '---', year: '', time: '' };
+  return {
+    full: d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+    weekday: d.toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase(),
+    day: d.toLocaleDateString(undefined, { day: 'numeric' }),
+    month: d.toLocaleDateString(undefined, { month: 'short' }).toUpperCase(),
+    year: d.getFullYear().toString(),
+    time: d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+  };
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
+  return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
 }
 
-function getVenueLabel(
-  venue?: { name: string; city?: string } | string | null
-) {
+function getVenueLabel(venue?: { name: string; city?: string } | string | null) {
   if (!venue) return 'Venue TBA';
   if (typeof venue === 'string') return venue;
   return venue.city ? `${venue.name}, ${venue.city}` : venue.name;
 }
+
+/* ── animations ──────────────────────────────────────────── */
+
+const fadeUp = keyframes`
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+`;
+
+/* ── order summary ───────────────────────────────────────── */
 
 function OrderSummary({
   ticketTypes,
@@ -79,81 +80,107 @@ function OrderSummary({
   quantities: Record<string, number>;
 }) {
   const lineItems = ticketTypes
-    .map((tt) => ({
-      ...tt,
-      qty: quantities[tt.id] ?? 0,
-      subtotal: (quantities[tt.id] ?? 0) * Number(tt.price),
-    }))
+    .map((tt) => ({ ...tt, qty: quantities[tt.id] ?? 0, subtotal: (quantities[tt.id] ?? 0) * Number(tt.price) }))
     .filter((item) => item.qty > 0);
 
   const total = lineItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const hasItems = lineItems.length > 0;
 
   return (
-    <Card variant="outline" position="sticky" top="6">
-      <CardBody p={5}>
-        <Text fontWeight="500" fontSize="sm" mb={3}>
+    <Box
+      bg="rgba(245,239,230,0.04)"
+      border="1px solid rgba(245,239,230,0.1)"
+      borderRadius="4px"
+      overflow="hidden"
+      position="sticky"
+      top="88px"
+    >
+      <Box h="1px" bg="rgba(212,140,40,0.5)" />
+      <Box p={5}>
+        <Text
+          fontFamily="'DM Sans', sans-serif"
+          fontSize="10px"
+          fontWeight="500"
+          letterSpacing="0.16em"
+          textTransform="uppercase"
+          color="rgba(245,239,230,0.35)"
+          mb={4}
+        >
           Order summary
         </Text>
 
-        {!hasItems ? (
-          <Text fontSize="sm" color="gray.400" py={2}>
+        {lineItems.length === 0 ? (
+          <Text
+            fontFamily="'DM Sans', sans-serif"
+            fontSize="13px"
+            fontWeight="300"
+            color="rgba(245,239,230,0.25)"
+            fontStyle="italic"
+            py={2}
+          >
             No tickets selected yet.
           </Text>
         ) : (
           <>
-            <Flex direction="column" gap={2} mb={3}>
+            <Flex direction="column" gap={2} mb={4}>
               {lineItems.map((item) => (
-                <Flex key={item.id} justify="space-between" fontSize="sm">
-                  <Text color="gray.600">
+                <Flex key={item.id} justify="space-between" align="baseline">
+                  <Text fontFamily="'DM Sans', sans-serif" fontSize="13px" fontWeight="300" color="rgba(245,239,230,0.55)">
                     {item.qty} × {item.name}
                   </Text>
-                  <Text fontWeight="500">{formatCurrency(item.subtotal)}</Text>
+                  <Text fontFamily="'DM Sans', sans-serif" fontSize="13px" fontWeight="500" color="#f5efe6">
+                    {formatCurrency(item.subtotal)}
+                  </Text>
                 </Flex>
               ))}
             </Flex>
-            <Divider mb={3} />
-            <Flex justify="space-between" fontWeight="500">
-              <Text>Total</Text>
-              <Text>{formatCurrency(total)}</Text>
+
+            <Box h="1px" bg="rgba(245,239,230,0.08)" mb={4} />
+
+            <Flex justify="space-between" align="baseline" mb={1}>
+              <Text fontFamily="'DM Sans', sans-serif" fontSize="11px" fontWeight="500" letterSpacing="0.1em" textTransform="uppercase" color="rgba(245,239,230,0.35)">
+                Total
+              </Text>
+              <Text
+                fontFamily="'DM Serif Display', Georgia, serif"
+                fontStyle="italic"
+                fontSize="22px"
+                fontWeight="400"
+                color="#f5c842"
+                letterSpacing="-0.02em"
+                lineHeight="1"
+              >
+                {formatCurrency(total)}
+              </Text>
             </Flex>
           </>
         )}
 
-        <Divider my={4} />
-        <Text
-          fontSize="xs"
-          color="gray.400"
-          mb={2}
-          textTransform="uppercase"
-          letterSpacing="wide"
-        >
+        {/* price list */}
+        <Box h="1px" bg="rgba(245,239,230,0.08)" my={4} />
+        <Text fontFamily="'DM Sans', sans-serif" fontSize="10px" fontWeight="500" letterSpacing="0.14em" textTransform="uppercase" color="rgba(245,239,230,0.25)" mb={3}>
           Ticket prices
         </Text>
-        <Flex direction="column" gap={1}>
+        <Flex direction="column" gap={2}>
           {ticketTypes.map((tt) => (
-            <Flex key={tt.id} justify="space-between" fontSize="sm">
-              <Text color="gray.600" noOfLines={1}>
+            <Flex key={tt.id} justify="space-between" align="center">
+              <Text fontFamily="'DM Sans', sans-serif" fontSize="13px" fontWeight="300" color="rgba(245,239,230,0.5)" noOfLines={1}>
                 {tt.name}
               </Text>
-              <Text color="gray.500">
+              <Text fontFamily="'DM Sans', sans-serif" fontSize="12px" fontWeight="400" color="rgba(245,239,230,0.35)">
                 {formatCurrency(Number(tt.price))}
               </Text>
             </Flex>
           ))}
         </Flex>
-      </CardBody>
-    </Card>
+      </Box>
+    </Box>
   );
 }
 
-export default function EventDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const { id } = params;
+/* ── page ────────────────────────────────────────────────── */
 
+export default function EventDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
   const toast = useToast();
   const { data: event, isLoading, error } = useEvent(id);
@@ -162,11 +189,7 @@ export default function EventDetailPage({
   const ticketTypes = event?.ticketTypes ?? [];
 
   const defaultQuantities = useMemo(
-    () =>
-      ticketTypes.reduce<Record<string, number>>((acc, tt) => {
-        acc[tt.id] = 0;
-        return acc;
-      }, {}),
+    () => ticketTypes.reduce<Record<string, number>>((acc, tt) => { acc[tt.id] = 0; return acc; }, {}),
     [ticketTypes]
   );
 
@@ -175,187 +198,330 @@ export default function EventDetailPage({
     defaultValues: { quantities: defaultQuantities },
   });
 
-  useEffect(() => {
-    form.reset({ quantities: defaultQuantities });
-  }, [defaultQuantities, form]);
+  useEffect(() => { form.reset({ quantities: defaultQuantities }); }, [defaultQuantities, form]);
 
   const watchedQuantities = form.watch('quantities') ?? {};
 
   const onSubmit = async (data: QuantitiesForm) => {
     if (!event) return;
-
     if (!isAuthenticated) {
       toast({ title: 'Please log in to buy tickets', status: 'warning' });
       router.push(`/auth/login?redirect=/events/${event.id}`);
       return;
     }
-
     const items = Object.entries(data.quantities ?? {})
       .filter(([, qty]) => qty > 0)
       .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
-
     try {
       const res = await ordersApi.create({ eventId: event.id, items });
       const order = res.data;
-
-      toast({
-        title: 'Order created',
-        description: 'Checkout page is not built yet.',
-        status: 'success',
-        duration: 2500,
-      });
-
-      if (order?.id) {
-        console.log('Created order id:', order.id);
-      }
+      toast({ title: 'Order created!', status: 'success', duration: 2500 });
+      if (order?.id) console.log('Created order id:', order.id);
     } catch (err) {
-      toast({
-        title: 'Could not create order',
-        description: (err as Error).message,
-        status: 'error',
-      });
+      toast({ title: 'Could not create order', description: (err as Error).message, status: 'error' });
     }
   };
 
+  /* ── error ── */
   if (error) {
     return (
-      <Container maxW="4xl" py={8}>
-        <Alert status="error" borderRadius="md">
-          <AlertIcon />
-          {(error as Error).message}
-        </Alert>
-      </Container>
+      <Box minH="100vh" bg="#0a0908" display="flex" alignItems="center" justifyContent="center" px={4}>
+        <Box textAlign="center">
+          <Text fontFamily="'DM Serif Display', Georgia, serif" fontStyle="italic" fontSize="22px" color="rgba(245,239,230,0.3)" mb={6}>
+            Something went wrong
+          </Text>
+          <Alert status="error" borderRadius="2px" bg="rgba(163,45,45,0.18)" border="1px solid rgba(163,45,45,0.4)" color="rgba(245,239,230,0.8)" fontSize="13px" fontFamily="'DM Sans', sans-serif" maxW="400px">
+            <AlertIcon color="#e24b4a" boxSize="14px" />
+            {(error as Error).message}
+          </Alert>
+        </Box>
+      </Box>
     );
   }
 
+  /* ── loading ── */
   if (isLoading || !event) {
     return (
-      <Container maxW="4xl" py={8}>
-        <Skeleton height="40px" borderRadius="md" mb={4} width="60%" />
-        <Skeleton height="20px" borderRadius="md" mb={8} width="40%" />
-        <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
-          <Skeleton flex={1} height="360px" borderRadius="lg" />
-          <Skeleton
-            w={{ base: '100%', lg: '280px' }}
-            height="260px"
-            borderRadius="lg"
-            flexShrink={0}
-          />
-        </Flex>
-      </Container>
+      <Box minH="100vh" bg="#0a0908" pt={{ base: 8, md: 12 }}>
+        <Container maxW="4xl" px={{ base: 5, md: 10 }}>
+          <Skeleton h="12px" w="120px" mb={10} startColor="rgba(245,239,230,0.06)" endColor="rgba(245,239,230,0.12)" borderRadius="2px" />
+          <Skeleton h="52px" w="75%" mb={4} startColor="rgba(245,239,230,0.06)" endColor="rgba(245,239,230,0.12)" borderRadius="2px" />
+          <Skeleton h="16px" w="45%" mb={10} startColor="rgba(245,239,230,0.06)" endColor="rgba(245,239,230,0.12)" borderRadius="2px" />
+          <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
+            <Skeleton flex={1} h="340px" startColor="rgba(245,239,230,0.06)" endColor="rgba(245,239,230,0.12)" borderRadius="4px" />
+            <Skeleton w={{ base: '100%', lg: '260px' }} h="280px" startColor="rgba(245,239,230,0.06)" endColor="rgba(245,239,230,0.12)" borderRadius="4px" flexShrink={0} />
+          </Flex>
+        </Container>
+      </Box>
     );
   }
 
-  const isPast = new Date(event.startTime) < new Date();
+  const { full, weekday, day, month, year, time } = formatDate(event.startTime);
   const venueName = getVenueLabel(event.venue);
+  const isPast = new Date(event.startTime) < new Date();
+  const isDraft = event.isPublished === false;
 
   return (
-    <Container maxW="4xl" py={8} px={4}>
-      <Box mb={8}>
-        <HStack mb={2} gap={2}>
-          {event.isPublished === false && (
-            <Badge colorScheme="yellow">Draft</Badge>
-          )}
-          {isPast && <Badge colorScheme="gray">Past event</Badge>}
-        </HStack>
+    <Box minH="100vh" bg="#0a0908" fontFamily="'DM Sans', sans-serif" position="relative">
 
-        <Heading size="xl" mb={3}>
-          {event.name}
-        </Heading>
+      {/* ambient glow */}
+      <Box
+        position="fixed"
+        top={0} left="50%"
+        transform="translateX(-50%)"
+        w="700px" h="300px"
+        background="radial-gradient(ellipse at 50% 0%, rgba(212,140,40,0.09) 0%, transparent 70%)"
+        pointerEvents="none"
+        zIndex={0}
+      />
 
-        <Flex direction="column" gap={1}>
-          <HStack color="gray.500" fontSize="md" spacing={2}>
-            <CalendarIcon boxSize={4} />
-            <Text>{formatDate(event.startTime)}</Text>
-          </HStack>
-          <HStack color="gray.500" fontSize="md" spacing={2}>
-            <Icon viewBox="0 0 24 24" boxSize={4}>
-              <path
-                fill="currentColor"
-                d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"
-              />
-            </Icon>
-            <Text>{venueName}</Text>
-          </HStack>
-        </Flex>
-      </Box>
+      <Container maxW="4xl" px={{ base: 5, md: 8 }} pt={{ base: 8, md: 12 }} pb={20} position="relative" zIndex={1}>
 
-      <Flex gap={8} direction={{ base: 'column', lg: 'row' }}>
-        <Box flex={1} minW={0}>
-          {event.description && (
-            <Card variant="outline" mb={4}>
-              <CardBody>
-                <Text color="gray.700" lineHeight="tall" whiteSpace="pre-wrap">
-                  {event.description}
-                </Text>
-              </CardBody>
-            </Card>
-          )}
-
-          {isPast ? (
-            <Card variant="outline" bg="gray.50">
-              <CardBody>
-                <Text color="gray.500" textAlign="center" py={4}>
-                  Ticket sales for this event have closed.
-                </Text>
-              </CardBody>
-            </Card>
-          ) : (
-            <Card variant="outline">
-              <CardBody>
-                <Heading size="sm" mb={4}>
-                  Select tickets
-                </Heading>
-
-                <FormProvider {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-                    <TicketTypeSelector
-                      ticketTypes={ticketTypes}
-                      name="quantities"
-                    />
-
-                    {form.formState.errors.quantities && (
-                      <Text color="red.500" fontSize="sm" mt={3}>
-                        {String(form.formState.errors.quantities.message)}
-                      </Text>
-                    )}
-
-                    <Flex mt={6} gap={3} align="center">
-                      {isAuthenticated ? (
-                        <Button
-                          type="submit"
-                          colorScheme="brand"
-                          loadingText="Creating order..."
-                          isLoading={form.formState.isSubmitting}
-                        >
-                          Create order
-                        </Button>
-                      ) : (
-                        <Button
-                          as={Link}
-                          href={`/auth/login?redirect=/events/${event.id}`}
-                          colorScheme="brand"
-                        >
-                          Log in to buy tickets
-                        </Button>
-                      )}
-                    </Flex>
-                  </form>
-                </FormProvider>
-              </CardBody>
-            </Card>
-          )}
+        {/* breadcrumb */}
+        <Box mb={10} animation={`${fadeUp} 0.4s ease both`}>
+          <Button
+            variant="unstyled"
+            fontFamily="'DM Sans', sans-serif"
+            fontSize="12px"
+            fontWeight="400"
+            letterSpacing="0.08em"
+            color="rgba(245,239,230,0.25)"
+            display="inline-flex"
+            alignItems="center"
+            h="auto" p={0}
+            _hover={{ color: 'rgba(245,239,230,0.55)' }}
+            transition="color 0.15s"
+            onClick={() => router.back()}
+          >
+            ← Events
+          </Button>
         </Box>
 
-        {!isPast && ticketTypes.length > 0 && (
-          <Box w={{ base: '100%', lg: '280px' }} flexShrink={0}>
-            <OrderSummary
-              ticketTypes={ticketTypes}
-              quantities={watchedQuantities}
-            />
+        {/* hero */}
+        <Box
+          mb={10} pb={8}
+          borderBottom="1px solid rgba(245,239,230,0.1)"
+          animation={`${fadeUp} 0.45s 0.05s ease both`}
+        >
+          {/* badges */}
+          {(isDraft || isPast) && (
+            <HStack spacing={2} mb={3}>
+              {isDraft && (
+                <Box
+                  display="inline-flex" alignItems="center"
+                  px={3} h="22px"
+                  bg="rgba(212,140,40,0.15)"
+                  border="1px solid rgba(212,140,40,0.35)"
+                  borderRadius="2px"
+                  fontFamily="'DM Sans', sans-serif"
+                  fontSize="10px" fontWeight="500"
+                  letterSpacing="0.14em" textTransform="uppercase"
+                  color="#d48c28"
+                >
+                  Draft
+                </Box>
+              )}
+              {isPast && (
+                <Box
+                  display="inline-flex" alignItems="center"
+                  px={3} h="22px"
+                  bg="rgba(245,239,230,0.06)"
+                  border="1px solid rgba(245,239,230,0.12)"
+                  borderRadius="2px"
+                  fontFamily="'DM Sans', sans-serif"
+                  fontSize="10px" fontWeight="500"
+                  letterSpacing="0.14em" textTransform="uppercase"
+                  color="rgba(245,239,230,0.35)"
+                >
+                  Past event
+                </Box>
+              )}
+            </HStack>
+          )}
+
+
+          {event.category && (
+            <Text
+              fontSize="11px" fontWeight="500"
+              letterSpacing="0.18em" textTransform="uppercase"
+              color="#d48c28" mb={3}
+            >
+              {event.category}
+            </Text>
+          )}
+
+          <Heading
+            as="h1"
+            fontFamily="'DM Serif Display', Georgia, serif"
+            fontWeight="400" fontStyle="italic"
+            fontSize={{ base: '34px', md: '52px' }}
+            color="#f5efe6"
+            lineHeight="0.95"
+            letterSpacing="-0.02em"
+            mb={5}
+          >
+            {event.name}
+          </Heading>
+
+          <HStack spacing={0} flexWrap="wrap" gap={3}>
+            <Text fontSize="14px" fontWeight="300" color="rgba(245,239,230,0.5)" letterSpacing="0.02em">{full}</Text>
+            <Text fontSize="14px" color="rgba(245,239,230,0.2)">·</Text>
+            <Text fontSize="14px" fontWeight="300" color="rgba(245,239,230,0.5)" letterSpacing="0.02em">{venueName}</Text>
+          </HStack>
+        </Box>
+
+        {/* two-col */}
+        <Flex gap={{ base: 8, lg: 10 }} direction={{ base: 'column', lg: 'row' }} align="start">
+
+          {/* ── LEFT ── */}
+          <Box flex={1} minW={0} animation={`${fadeUp} 0.45s 0.1s ease both`}>
+
+            {/* meta strip */}
+            <Box
+              display="grid"
+              gridTemplateColumns={{ base: '1fr 1fr', sm: 'repeat(3, 1fr)' }}
+              gap={5} p={5} mb={8}
+              bg="rgba(245,239,230,0.03)"
+              border="1px solid rgba(245,239,230,0.08)"
+              borderRadius="4px"
+            >
+              {/* date */}
+              <Box>
+                <Text fontSize="10px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="#d48c28" mb="6px">
+                  Date
+                </Text>
+                <Flex align="baseline" gap="5px">
+                  <Text fontFamily="'DM Serif Display', Georgia, serif" fontSize="32px" fontWeight="400" color="#f5efe6" lineHeight="1">
+                    {day}
+                  </Text>
+                  <Box>
+                    <Text fontFamily="'DM Sans', sans-serif" fontSize="11px" fontWeight="500" color="rgba(245,239,230,0.5)" letterSpacing="0.06em" display="block">{month}</Text>
+                    <Text fontFamily="'DM Sans', sans-serif" fontSize="11px" fontWeight="300" color="rgba(245,239,230,0.3)" display="block">{year}</Text>
+                  </Box>
+                </Flex>
+                <Text fontSize="11px" fontWeight="300" color="rgba(245,239,230,0.35)" letterSpacing="0.04em" mt="2px">{weekday}</Text>
+              </Box>
+
+              {/* time */}
+              <Box>
+                <Text fontSize="10px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="#d48c28" mb="6px">Time</Text>
+                <Text fontSize="14px" fontWeight="300" color="rgba(245,239,230,0.7)" letterSpacing="0.02em">{time || 'TBA'}</Text>
+              </Box>
+
+              {/* venue */}
+              <Box>
+                <Text fontSize="10px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="#d48c28" mb="6px">Venue</Text>
+                <Text fontSize="14px" fontWeight="300" color="rgba(245,239,230,0.7)" letterSpacing="0.02em" lineHeight="1.4">{venueName}</Text>
+              </Box>
+            </Box>
+
+            {/* description */}
+            {event.description && (
+              <Box mb={8}>
+                <Text fontSize="11px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="rgba(245,239,230,0.3)" mb={4}>
+                  About this event
+                </Text>
+                <Text
+                  fontFamily="'DM Serif Display', Georgia, serif"
+                  fontSize={{ base: '16px', md: '18px' }}
+                  fontWeight="400"
+                  color="rgba(245,239,230,0.65)"
+                  lineHeight="1.75"
+                  letterSpacing="0.01em"
+                  whiteSpace="pre-wrap"
+                >
+                  {event.description}
+                </Text>
+              </Box>
+            )}
+
+            {/* ticket selector */}
+            <Box
+              bg="rgba(245,239,230,0.03)"
+              border="1px solid rgba(245,239,230,0.08)"
+              borderRadius="4px"
+              overflow="hidden"
+            >
+              <Box h="1px" bg="rgba(212,140,40,0.3)" />
+              <Box p={5}>
+                <Text fontSize="11px" fontWeight="500" letterSpacing="0.16em" textTransform="uppercase" color="rgba(245,239,230,0.35)" mb={5}>
+                  {isPast ? 'Ticket sales closed' : 'Select tickets'}
+                </Text>
+
+                {isPast ? (
+                  <Text fontFamily="'DM Serif Display', Georgia, serif" fontStyle="italic" fontSize="16px" color="rgba(245,239,230,0.3)" py={2}>
+                    Ticket sales for this event have closed.
+                  </Text>
+                ) : (
+                  <FormProvider {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+                      <TicketTypeSelector ticketTypes={ticketTypes} name="quantities" />
+
+                      {form.formState.errors.quantities && (
+                        <Text
+                          fontFamily="'DM Sans', sans-serif"
+                          fontSize="12px" fontWeight="400"
+                          color="#e24b4a" mt={3}
+                          letterSpacing="0.02em"
+                        >
+                          {String(form.formState.errors.quantities.message)}
+                        </Text>
+                      )}
+
+                      <Box mt={6}>
+                        {isAuthenticated ? (
+                          <Button
+                            type="submit"
+                            isLoading={form.formState.isSubmitting}
+                            loadingText="Creating order…"
+                            variant="unstyled"
+                            fontFamily="'DM Sans', sans-serif"
+                            fontSize="12px" fontWeight="500"
+                            letterSpacing="0.12em" textTransform="uppercase"
+                            color="#0a0908" bg="#d48c28"
+                            borderRadius="2px" h="44px" px={6}
+                            display="inline-flex" alignItems="center"
+                            _hover={{ bg: '#f5c842' }}
+                            _active={{ bg: '#ba7517' }}
+                            _loading={{ bg: '#d48c28', opacity: 0.7 }}
+                            transition="background 0.15s"
+                          >
+                            Create order
+                          </Button>
+                        ) : (
+                          <Button
+                            as={Link}
+                            href={`/auth/login?redirect=/events/${event.id}`}
+                            variant="unstyled"
+                            fontFamily="'DM Sans', sans-serif"
+                            fontSize="12px" fontWeight="500"
+                            letterSpacing="0.12em" textTransform="uppercase"
+                            color="#0a0908" bg="#d48c28"
+                            borderRadius="2px" h="44px" px={6}
+                            display="inline-flex" alignItems="center"
+                            _hover={{ bg: '#f5c842', textDecoration: 'none' }}
+                            transition="background 0.15s"
+                          >
+                            Log in to buy tickets
+                          </Button>
+                        )}
+                      </Box>
+                    </form>
+                  </FormProvider>
+                )}
+              </Box>
+            </Box>
           </Box>
-        )}
-      </Flex>
-    </Container>
+
+          {/* ── RIGHT: order summary ── */}
+          {!isPast && ticketTypes.length > 0 && (
+            <Box w={{ base: '100%', lg: '260px' }} flexShrink={0} animation={`${fadeUp} 0.45s 0.15s ease both`}>
+              <OrderSummary ticketTypes={ticketTypes} quantities={watchedQuantities} />
+            </Box>
+          )}
+
+        </Flex>
+      </Container>
+    </Box>
   );
 }
