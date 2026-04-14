@@ -299,8 +299,12 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
 
     try {
       const res = await ordersApi.create({ eventId: event.id, items });
+
+      const {orderId, clientSecret} = res.data;
+
       const order = res.data;
-      toast({ title: 'Order created!', status: 'success', duration: 2500 });
+      toast({ title: 'Redirecting to checkout...', status: 'success', duration: 2500 });
+      router.push(`/checkout/${orderId}`);
       if (order?.id) console.log('Created order id:', order.id);
     } catch (err) {
       toast({
