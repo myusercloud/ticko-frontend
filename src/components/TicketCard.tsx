@@ -12,13 +12,17 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import type { Ticket } from '@/lib/types';
 
+const DATE_LOCALE = 'en-KE';
+const DATE_TIME_ZONE = 'Africa/Nairobi';
+
 function formatDate(dateStr?: string) {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
 
   const parsed = new Date(dateStr);
   if (Number.isNaN(parsed.getTime())) return dateStr;
 
-  return parsed.toLocaleDateString(undefined, {
+  return parsed.toLocaleDateString(DATE_LOCALE, {
+    timeZone: DATE_TIME_ZONE,
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -28,9 +32,9 @@ function formatDate(dateStr?: string) {
 function getVenueLabel(
   venue?: { name: string; city?: string } | string | null
 ): string {
-  if (!venue) return '—';
+  if (!venue) return '-';
   if (typeof venue === 'string') return venue;
-  if (venue.city) return `${venue.name} • ${venue.city}`;
+  if (venue.city) return `${venue.name} - ${venue.city}`;
   return venue.name;
 }
 
@@ -78,7 +82,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
             </Heading>
 
             <Text fontSize="sm" color="gray.600">
-              {ticketType?.name ?? 'Ticket'} • {getVenueLabel(event?.venue)}
+              {ticketType?.name ?? 'Ticket'} - {getVenueLabel(event?.venue)}
             </Text>
 
             <Text fontSize="xs" color="gray.500" mt={1}>

@@ -5,6 +5,9 @@ import { keyframes } from '@emotion/react';
 import Link from 'next/link';
 import type { Event } from '@/lib/types';
 
+const DATE_LOCALE = 'en-KE';
+const DATE_TIME_ZONE = 'Africa/Nairobi';
+
 function formatDate(dateStr: string) {
   const parsed = new Date(dateStr);
 
@@ -20,12 +23,25 @@ function formatDate(dateStr: string) {
 
   return {
     weekday: parsed
-      .toLocaleDateString(undefined, { weekday: 'short' })
+      .toLocaleDateString(DATE_LOCALE, {
+        timeZone: DATE_TIME_ZONE,
+        weekday: 'short',
+      })
       .toUpperCase(),
-    day: parsed.toLocaleDateString(undefined, { day: 'numeric' }),
-    month: parsed.toLocaleDateString(undefined, { month: 'short' }),
-    year: parsed.getFullYear().toString(),
-    time: parsed.toLocaleTimeString(undefined, {
+    day: parsed.toLocaleDateString(DATE_LOCALE, {
+      timeZone: DATE_TIME_ZONE,
+      day: 'numeric',
+    }),
+    month: parsed.toLocaleDateString(DATE_LOCALE, {
+      timeZone: DATE_TIME_ZONE,
+      month: 'short',
+    }),
+    year: parsed.toLocaleDateString(DATE_LOCALE, {
+      timeZone: DATE_TIME_ZONE,
+      year: 'numeric',
+    }),
+    time: parsed.toLocaleTimeString(DATE_LOCALE, {
+      timeZone: DATE_TIME_ZONE,
       hour: '2-digit',
       minute: '2-digit',
     }),
@@ -160,7 +176,7 @@ export function EventCard({ event }: EventCardProps) {
             color="rgba(245,239,230,0.3)"
             letterSpacing="0.04em"
           >
-            {time} &nbsp;·&nbsp; {year}
+            {time} &nbsp;-&nbsp; {year}
           </Text>
         </Box>
 
@@ -177,7 +193,7 @@ export function EventCard({ event }: EventCardProps) {
             }}
             lineHeight="1"
           >
-            →
+            -&gt;
           </Box>
         </Box>
 

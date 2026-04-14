@@ -42,7 +42,7 @@ export function TicketTypeSelector({
           return (
             <FormControl key={tt.id}>
               <FormLabel fontSize="sm">
-                {tt.name} - ${Number(tt.price).toFixed(2)}
+                {tt.name} - Ksh{Number(tt.price).toFixed(2)}
                 {max > 0 && (
                   <Text as="span" fontWeight="normal" color="gray.500" ml={2}>
                     ({max} left)

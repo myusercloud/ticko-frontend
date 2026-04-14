@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/lib/api';
@@ -9,7 +10,13 @@ import type { User } from '@/lib/types';
 export function useAuth() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const token = typeof window !== 'undefined' ? getToken() : null;
+  const [token, setTokenState] = useState<string | null>(null);
+  const [hasHydrated, setHasHydrated] = useState(false);
+
+  useEffect(() => {
+    setTokenState(getToken());
+    setHasHydrated(true);
+  }, []);
 
   const {
     data: user,
@@ -21,7 +28,7 @@ export function useAuth() {
       const res = await authApi.me();
       return res.data as User;
     },
-    enabled: !!token,
+    enabled: hasHydrated && !!token,
     retry: false,
   });
 
@@ -32,6 +39,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       setToken(data.token);
+      setTokenState(data.token);
       queryClient.setQueryData(['me', data.token], data.user);
       queryClient.setQueryData(['me'], data.user);
       router.push('/');
@@ -50,6 +58,7 @@ export function useAuth() {
     },
     onSuccess: (data) => {
       setToken(data.token);
+      setTokenState(data.token);
       queryClient.setQueryData(['me', data.token], data.user);
       queryClient.setQueryData(['me'], data.user);
       router.push('/');
@@ -59,6 +68,7 @@ export function useAuth() {
 
   const logout = () => {
     clearToken();
+    setTokenState(null);
     queryClient.removeQueries({ queryKey: ['me'] });
     router.push('/');
     router.refresh();
@@ -67,7 +77,7 @@ export function useAuth() {
   return {
     user,
     isAuthenticated: !!user,
-    isLoading: !!token && !isFetched && isLoadingUser,
+    isLoading: !hasHydrated || (!!token && !isFetched && isLoadingUser),
     login: loginMutation.mutateAsync,
     loginError: loginMutation.error,
     isLoggingIn: loginMutation.isPending,
