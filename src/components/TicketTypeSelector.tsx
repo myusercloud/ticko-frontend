@@ -75,8 +75,8 @@ export function TicketTypeSelector({
                   })}
                 />
                 <NumberInputStepper>
-                  <NumberIncrementStepper />
-                  <NumberDecrementStepper />
+                  <NumberIncrementStepper color="#f5efe6" bg="rgba(245,239,230,0.05)" />
+                  <NumberDecrementStepper color="#f5efe6" bg="rgba(245,239,230,0.1)" />
                 </NumberInputStepper>
               </NumberInput>
             </FormControl>

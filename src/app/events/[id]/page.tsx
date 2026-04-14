@@ -339,17 +339,6 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
             </HStack>
           )}
 
-
-          {event.category && (
-            <Text
-              fontSize="11px" fontWeight="500"
-              letterSpacing="0.18em" textTransform="uppercase"
-              color="#d48c28" mb={3}
-            >
-              {event.category}
-            </Text>
-          )}
-
           <Heading
             as="h1"
             fontFamily="'DM Serif Display', Georgia, serif"
