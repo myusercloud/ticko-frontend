@@ -300,12 +300,17 @@ export default function EventDetailPage({ params }: { params: { id: string } }) 
     try {
       const res = await ordersApi.create({ eventId: event.id, items });
 
-      const {orderId, clientSecret} = res.data;
+      const orderId = res.data.orderId;
 
-      const order = res.data;
+      if (!orderId) {
+        toast({ title: 'Failed to create order', description: 'Order ID missing', status: 'error' });
+        return;
+
+      }
+
+      console.log('Created order with ID:', orderId);
       toast({ title: 'Redirecting to checkout...', status: 'success', duration: 2500 });
       router.push(`/checkout/${orderId}`);
-      if (order?.id) console.log('Created order id:', order.id);
     } catch (err) {
       toast({
         title: 'Could not create order',
