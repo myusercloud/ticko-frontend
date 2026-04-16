@@ -50,7 +50,7 @@ function formatCurrency(amount: number | string | undefined) {
 
 function StatusPill({ status }: { status?: string }) {
   if (!status) return null;
-  const isPaid = status.toLowerCase() === 'paid';
+  const isPaid = ['paid', 'completed'].includes(status.toLowerCase());
   const isPending = status.toLowerCase() === 'pending';
   return (
     <Box
@@ -85,7 +85,6 @@ function StatusPill({ status }: { status?: string }) {
 
 export default function CheckoutPage() {
   
-  const token = localStorage.getItem('token');
   const { orderId } = useParams();
   const router = useRouter();
   const toast = useToast();
@@ -98,24 +97,29 @@ export default function CheckoutPage() {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/orders/${orderId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if(!token) {
-          toast({ title: 'Unauthorized', description: 'Please log in to view your order', status: 'error' });
-          router.push('/auth/login');
+        const res = await api.get(`/orders/${orderId}`);
+        setOrder(res.data);
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+            toast({ title: 'Unauthorized', description: 'Please log in', status: 'error' });
+            router.push('/auth/login');
+            return;
+        }
+
+        if (err.response?.status === 404) {
+          toast({ title: 'Order not found', description: 'The order ID is invalid', status: 'error' });
           return;
         }
-        setOrder(res.data);
-      } catch {
-        toast({ title: 'Failed to load order', status: 'error' });
+
+        toast({ title: 'Error fetching order', description: err.message, status: 'error' });
       } finally {
         setLoading(false);
+
       }
     };
+
     if (orderId) fetchOrder();
-  }, [orderId]);
+  }, [orderId, router, toast]);
 
   const fakePayment = async () => {
     setPaying(true);
